@@ -13,6 +13,7 @@ setup(
 
     package_data = {
         '': ['*.html'],
+        'hotdoc_gi_extension.transition_scripts': ['translate_sections.sh'],
     },
 
     entry_points = {'hotdoc.extensions': 'get_extension_classes = hotdoc_gi_extension.gi_extension:get_extension_classes'},
