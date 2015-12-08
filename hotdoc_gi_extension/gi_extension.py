@@ -7,14 +7,15 @@ from lxml import etree
 from hotdoc.core.symbols import *
 from hotdoc.core.comment_block import Comment, comment_from_tag
 from hotdoc.core.base_extension import BaseExtension, ExtDependency
-from gi_html_formatter import GIHtmlFormatter
 from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
-from hotdoc.core.wizard import Skip
-from hotdoc.utils.patcher import Patcher
 from hotdoc.core.gtk_doc_parser import GtkDocParser
 from hotdoc.core.doc_tool import HotdocWizard
 
+from hotdoc.utils.wizard import Skip
+from hotdoc.utils.patcher import Patcher
+
+from .gi_html_formatter import GIHtmlFormatter
 from .transition_scripts.sgml_to_sections import parse_sections, convert_to_markdown
 
 # FIXME: might conflict with comment_block.Annotation
