@@ -386,41 +386,6 @@ class GIHtmlFormatter(HtmlFormatter):
     def _get_assets_path(self):
         return os.path.join('..', 'assets')
 
-    def _get_extra_style_sheets(self, page):
-        res = []
-        if self.__gi_extension.language == 'python':
-            res.append('python.css')
-        elif self.__gi_extension.language == 'javascript':
-            res.append('js.css')
-        elif self.__gi_extension.language == 'c':
-            res.append('c.css')
-        res = [os.path.join('assets', s) for s in res]
-        res.extend(super(GIHtmlFormatter, self)._get_extra_style_sheets(page))
-        res = []
-        return res
-
-    def _do_get_scripts(self, page):
-        res = []
-        if self.__gi_extension.language == 'python':
-            res.append('prism-python.js')
-        elif self.__gi_extension.language == 'javascript':
-            res.append('prism-javascript.js')
-        elif self.__gi_extension.language == 'c':
-            res.append('prism-c.js')
-            res.append('prism-cpp.js')
-        res = [os.path.join('assets', s) for s in res]
-
-        res.extend(super(GIHtmlFormatter, self)._do_get_scripts(page))
-        return res
-
-    def _get_style_sheets(self, page):
-        stylesheets = HtmlFormatter._get_style_sheets (self, page)
-        return [os.path.join('..', s) for s in stylesheets]
-
-    def _get_scripts(self, page):
-        scripts = HtmlFormatter._get_scripts (self, page)
-        return [os.path.join('..', s) for s in scripts]
-
     def _format_page (self, page):
         new_names = {}
         if self.__gi_extension.language == 'python':

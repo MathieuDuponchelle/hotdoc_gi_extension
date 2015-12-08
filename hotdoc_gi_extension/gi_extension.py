@@ -11,10 +11,11 @@ from gi_html_formatter import GIHtmlFormatter
 from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.wizard import Skip
-from hotdoc.transition_scripts.sgml_to_sections import parse_sections, convert_to_markdown
-from hotdoc.transition_scripts.patcher import Patcher
+from hotdoc.utils.patcher import Patcher
 from hotdoc.core.gtk_doc_parser import GtkDocParser
 from hotdoc.core.doc_tool import HotdocWizard
+
+from .transition_scripts.sgml_to_sections import parse_sections, convert_to_markdown
 
 # FIXME: might conflict with comment_block.Annotation
 class Annotation (object):
@@ -566,7 +567,7 @@ def patch_comments(wizard, patcher, comments):
 
 def translate_section_file(sections_path):
     module_path = os.path.dirname(__file__)
-    trans_shscript_path = os.path.join(module_path, '..', 'transition_scripts',
+    trans_shscript_path = os.path.join(module_path, 'transition_scripts',
             'translate_sections.sh')
     cmd = [trans_shscript_path, sections_path, 'hotdoc-tmp-sections.txt']
     subprocess.check_call(cmd)
