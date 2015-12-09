@@ -19,6 +19,7 @@ setup(
     entry_points = {'hotdoc.extensions': 'get_extension_classes = hotdoc_gi_extension.gi_extension:get_extension_classes'},
     install_requires = [
         'hotdoc>=0.6',
+        'hotdoc_c_extension>=0.6',
         'lxml',
     ],
 )
