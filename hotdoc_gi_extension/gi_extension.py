@@ -14,6 +14,7 @@ from hotdoc.core.doc_tool import HotdocWizard
 
 from hotdoc.utils.wizard import Skip
 from hotdoc.utils.patcher import Patcher
+from hotdoc.utils.utils import get_all_extension_classes
 
 from .gi_html_formatter import GIHtmlFormatter
 from .transition_scripts.sgml_to_sections import parse_sections, convert_to_markdown
@@ -574,8 +575,9 @@ def translate_section_file(sections_path):
     subprocess.check_call(cmd)
 
 def port_from_gtk_doc(wizard):
-    from hotdoc.extensions.c_extension import validate_c_extension
-    validate_c_extension(wizard)
+    # We could not get there if c extension did not exist
+    CExtClass = get_all_extension_classes(sort=False)['c-extension']
+    CExtClass.validate_c_extension(wizard)
     patcher = Patcher()
 
     wizard.wait_for_continue(PROMPT_GTK_PORT_MAIN)
