@@ -670,7 +670,6 @@ class GIExtension(BaseExtension):
         self.gi_index = config.get('gi_index')
         self.languages = [l.lower() for l in config.get('languages', [])]
         self.language = 'c'
-        self.major_version = config.get('major_version')
         self.gir_parser = None
 
         doc_tool.doc_tree.page_parser.register_well_known_name ('gobject-api',
@@ -711,13 +710,10 @@ class GIExtension(BaseExtension):
                 finalize_function=HotdocWizard.finalize_path)
         group.add_argument ("--languages", action="store",
                 nargs='*',
-                help="Languages to translate documentation in")
-        group.add_argument ("--major-version", action="store",
-                dest="major_version",
-                help="Major version of the library")
+                help="Languages to translate documentation in (c, python, javascript)")
         group.add_argument ("--gi-index", action="store",
                 dest="gi_index",
-                help="Path to the GI root markdown file",
+                help="Name of the gi root markdown file, it should be in the same directory as the base index",
                 finalize_function=HotdocWizard.finalize_path)
 
     def __gather_gtk_doc_links (self):
