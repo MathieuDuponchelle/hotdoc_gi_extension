@@ -557,6 +557,9 @@ def patch_comments(wizard, patcher, comments):
         patcher.patch(comment.filename, comment.lineno - 1,
                 comment.endlineno, comment.raw_comment)
 
+    if wizard.git_interface is None:
+        return
+
     if wizard.git_interface.repo_path is not None:
         wizard.before_prompt()
         if wizard.ask_confirmation(PROMPT_COMMIT):
