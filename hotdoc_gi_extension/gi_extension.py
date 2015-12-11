@@ -533,7 +533,7 @@ def get_section_comments(wizard):
         if section_title is not None:
             section_title = section_title.text
             if wizard.symbols.get(section_title):
-                new_name = ('%s::%s' % (section_title,
+                new_name = ('%s::%s:' % (section_title,
                     section_title))
                 class_comments.append(comment)
                 comment.raw_comment = comment.raw_comment.replace(comment.name,
