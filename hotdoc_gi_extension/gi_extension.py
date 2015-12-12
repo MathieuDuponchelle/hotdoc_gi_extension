@@ -878,9 +878,9 @@ class GIExtension(BaseExtension):
 
             # FIXME: OK this is format time but still seems strange
             extra_content = self.doc_tool.formatter._format_annotations (annotations)
+            symbol.extension_contents['Annotations'] = extra_content
         else:
-            extra_content = ''
-        symbol.extension_contents['Annotations'] = extra_content
+            symbol.extension_contents.pop('Annotations', None)
 
     def __formatting_symbol(self, symbol):
         if type(symbol) in [ReturnValueSymbol, ParameterSymbol]:
