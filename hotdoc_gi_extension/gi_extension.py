@@ -556,6 +556,13 @@ def patch_comments(wizard, patcher, comments):
     for comment in comments:
         patcher.patch(comment.filename, comment.lineno - 1,
                 comment.endlineno, comment.raw_comment)
+        if comment.raw_comment == '':
+            for other_comment in comments:
+                if (other_comment.filename == comment.filename and
+                        other_comment.lineno > comment.endlineno):
+                    removed = comment.endlineno - comment.lineno
+                    other_comment.lineno -= removed
+                    other_comment.endlineno -= removed
 
     if wizard.git_interface is None:
         return
