@@ -351,6 +351,15 @@ class GIHtmlFormatter(HtmlFormatter):
             return HtmlFormatter._format_constant_summary (self, constant)
         return self._format_compound_summary (constant)
 
+    def _format_editing_link(self, symbol):
+        if not self.editing_server:
+            return None
+
+        template = self.engine.get_template("gi_editing_link.html")
+        return template.render({"symbol": symbol,
+                                "editing_server": self.editing_server,
+                                "language": self.__gi_extension.language})
+
     def _format_gi_vmethod (self, vmethod):
         title = vmethod.link.title
         if self.__gi_extension.language == 'python':
@@ -378,7 +387,7 @@ class GIHtmlFormatter(HtmlFormatter):
 
         template = self.engine.get_template('constant.html')
         out = template.render ({'symbol': constant,
-                                "editing_server": self.editing_server,
+                                "editing_link": self._format_editing_link(constant),
                                 'definition': None,
                                 'constant': constant})
         return (out, False)

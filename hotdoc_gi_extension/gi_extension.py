@@ -921,6 +921,7 @@ class GIExtension(BaseExtension):
                 link.title = translated_name
 
     def setup_language (self, language):
+        print "Setting up language", language
         self.language = language
 
         if language == 'c':
