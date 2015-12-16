@@ -1268,23 +1268,10 @@ class GIExtension(BaseExtension):
         return [ExtDependency('c-extension', upstream=True)]
 
     def gi_index_handler (self, doc_tree):
-        gen_contents = ''
-        gen_index_page = Page('gen-index')
-
-        for language in self.languages:
-            dest = os.path.basename(self.gi_index)
-            dest = '%s/%s.html' % (language, os.path.splitext(dest)[0])
-            gen_contents += '### [%s API](%s)\n' % \
-                    (language.capitalize (), dest)
-
-        doc_tree.page_parser.parse_contents(gen_index_page, gen_contents)
-
-        doc_tree.pages['gen-index'] = gen_index_page
         index_path = os.path.join(doc_tree.prefix, self.gi_index)
         index_path = self.doc_tool.resolve_config_path(index_path)
-        gen_index_page.subpages.add(index_path)
         new_page = doc_tree.build_tree(index_path, 'gi-extension')
-        return "gen-index"
+        return index_path, 'c'
 
     def setup (self):
         if not self.gir_file:
