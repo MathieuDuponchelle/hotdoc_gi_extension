@@ -406,10 +406,6 @@ class GIHtmlFormatter(HtmlFormatter):
                     new_names)
         return HtmlFormatter._format_page (self, page)
 
-    def _format_symbol(self, symbol):
-        self.__gi_extension.update_links(symbol)
-        return HtmlFormatter._format_symbol(self, symbol)
-
     def set_fundamentals(self, language):
         if language == 'python':
             self.fundamentals = self.python_fundamentals
@@ -445,7 +441,7 @@ class GIHtmlFormatter(HtmlFormatter):
             with open(page_path, 'w') as f:
                 tree.write_c14n(f)
 
-        self.__gi_extension.setup_language('c')
+        self.__gi_extension.setup_language(None)
         self.set_fundamentals('c')
 
     def format (self, page):
@@ -465,4 +461,5 @@ class GIHtmlFormatter(HtmlFormatter):
                 os.mkdir (self._output)
             HtmlFormatter.format (self, page)
 
+        self.__gi_extension.setup_language(None)
         self.set_fundamentals('c')

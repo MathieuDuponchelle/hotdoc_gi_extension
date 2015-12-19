@@ -906,34 +906,40 @@ class GIExtension(BaseExtension):
 
         return True
 
-    def update_links(self, symbol):
-        if not symbol:
-            return
+    def __translate_link_ref(self, link):
+        return
 
-        if isinstance(symbol, QualifiedSymbol):
-            link = symbol.type_link
-        else:
-            link = symbol.link
-
-        if link:
-            translated_name = self.__translated_names.get(link.id_)
-            if translated_name is not None:
-                link.title = translated_name
+    def __translate_link_title(self, link):
+        return self.__translated_names.get(link.id_)
 
     def setup_language (self, language):
-        print "Setting up language", language
         self.language = language
 
+        print "setting up language", language
+        try:
+            Link.resolving_link_signal.disconnect(self.__translate_link_ref)
+        except KeyError:
+            pass
+
+        try:
+            Link.resolving_title_signal.disconnect(self.__translate_link_title)
+        except KeyError:
+            pass
+
         if language == 'c':
+            Link.resolving_link_signal.connect(self.__translate_link_ref)
+            Link.resolving_title_signal.connect(self.__translate_link_title)
             self.__translated_names = self.gir_parser.c_names
         elif language == 'python':
+            Link.resolving_link_signal.connect(self.__translate_link_ref)
+            Link.resolving_title_signal.connect(self.__translate_link_title)
             self.__translated_names = self.gir_parser.python_names
         elif language == 'javascript':
             self.__translated_names = self.gir_parser.javascript_names
+            Link.resolving_link_signal.connect(self.__translate_link_ref)
+            Link.resolving_title_signal.connect(self.__translate_link_title)
         else:
             self.__translated_names = {}
-
-        self.doc_tool.link_resolver.set_translated_names(self.__translated_names)
 
     def __unnest_type (self, parameter):
         array_nesting = 0
