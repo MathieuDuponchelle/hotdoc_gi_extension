@@ -514,6 +514,17 @@ something like $(project_name)-docs.sgml
 Path to the SGML file ? """
 
 def get_section_comments(wizard):
+    gir_file = wizard.resolve_config_path(wizard.config.get('gir_file'))
+    root = etree.parse(gir_file).getroot()
+    xns = root.find("{http://www.gtk.org/introspection/core/1.0}namespace")
+    ns = xns.attrib['name']
+    xclasses = root.findall('.//{http://www.gtk.org/introspection/core/1.0}class')
+
+    class_names = set({})
+
+    for xclass in xclasses:
+        class_names.add(ns + xclass.attrib['name'])
+
     sections = parse_sections('hotdoc-tmp-sections.txt')
     translator = GtkDocParser()
 
@@ -532,7 +543,7 @@ def get_section_comments(wizard):
         section_title = section.find('TITLE')
         if section_title is not None:
             section_title = section_title.text
-            if wizard.symbols.get(section_title):
+            if section_title in class_names:
                 new_name = ('%s::%s:' % (section_title,
                     section_title))
                 class_comments.append(comment)
@@ -647,6 +658,8 @@ class GIWizard(HotdocWizard):
         if not HotdocWizard.group_prompt(self):
             return False
 
+        res = HotdocWizard.do_quick_start(self)
+
         self.before_prompt()
         try:
             choice = self.propose_choice(
@@ -660,7 +673,7 @@ class GIWizard(HotdocWizard):
         except Skip:
             pass
 
-        return HotdocWizard.do_quick_start(self)
+        return res
 
     def get_index_path(self):
         return 'gobject-api'
@@ -723,7 +736,9 @@ class GIExtension(BaseExtension):
                 help="Languages to translate documentation in (c, python, javascript)")
         group.add_argument ("--gi-index", action="store",
                 dest="gi_index",
-                help="Name of the gi root markdown file, it should be in the same directory as the base index",
+                help=("Name of the gi root markdown file, you can answer None "
+                    "and follow the prompts later on to have "
+                    "one created for you"),
                 finalize_function=HotdocWizard.finalize_path)
 
     def __gather_gtk_doc_links (self):
