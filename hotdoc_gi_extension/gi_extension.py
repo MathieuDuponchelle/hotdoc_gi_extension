@@ -907,9 +907,14 @@ class GIExtension(BaseExtension):
         return True
 
     def __translate_link_ref(self, link):
-        return
+        if link.id_ in self.gir_parser.unintrospectable_symbols and self.language != 'c':
+            return '../c/' + link.ref
+        else:
+            return None
 
     def __translate_link_title(self, link):
+        if link.id_ in self.gir_parser.unintrospectable_symbols and self.language != 'c':
+            return link._title + ' (not introspectable)'
         return self.__translated_names.get(link.id_)
 
     def setup_language (self, language):
