@@ -1307,7 +1307,7 @@ class GIExtension(BaseExtension):
         self.gir_parser = GIRParser (self.doc_tool, self.gir_file)
         formatter = self.get_formatter(self.doc_tool.output_format)
         self.doc_tool.doc_tree.symbol_added_signal.connect (self.__adding_symbol)
-        formatter.formatting_symbol_signals[Symbol].connect(self.__formatting_symbol)
+        formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
 def get_extension_classes():
     return [GIExtension]
