@@ -2,9 +2,9 @@
 
 @for annotation in annotations:
 <span class="annotation">[\
-<acronym title="@annotation.help_text">\
+<abbr title="@annotation.help_text">\
 <span class="acronym">@annotation.nick</span>\
-</acronym>\
+</abbr>\
 @if annotation.value:
  @annotation.value\
 @end
