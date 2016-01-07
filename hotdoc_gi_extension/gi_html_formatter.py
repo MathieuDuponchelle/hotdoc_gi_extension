@@ -453,6 +453,7 @@ class GIHtmlFormatter(HtmlFormatter):
                     self.c_fundamentals[c_name] = Link(elink.ref, elink.title, None)
 
         for l in self.__gi_extension.languages:
+            print "Building %s documentation" % l
             self.set_fundamentals(l)
 
             self.__gi_extension.setup_language (l)

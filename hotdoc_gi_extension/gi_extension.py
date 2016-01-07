@@ -935,7 +935,6 @@ class GIExtension(BaseExtension):
     def setup_language (self, language):
         self.language = language
 
-        print "setting up language", language
         try:
             Link.resolving_link_signal.disconnect(self.__translate_link_ref)
         except KeyError:
