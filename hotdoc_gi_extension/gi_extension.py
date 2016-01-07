@@ -1295,8 +1295,8 @@ class GIExtension(BaseExtension):
     def gi_index_handler (self, doc_tree):
         index_path = os.path.join(doc_tree.prefix, self.gi_index)
         index_path = self.doc_tool.resolve_config_path(index_path)
-        new_page = doc_tree.build_tree(index_path, 'gi-extension')
-        return index_path, 'c'
+
+        return index_path, 'c', 'gi-extension'
 
     def setup (self):
         if not self.gir_file:
