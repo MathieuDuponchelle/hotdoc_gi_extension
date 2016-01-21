@@ -10,7 +10,7 @@ from hotdoc.core.base_extension import BaseExtension, ExtDependency
 from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.gtk_doc_parser import GtkDocParser
-from hotdoc.core.doc_tool import HotdocWizard
+from hotdoc.core.wizard import HotdocWizard
 
 from hotdoc.utils.wizard import Skip
 from hotdoc.utils.patcher import Patcher
@@ -514,7 +514,10 @@ something like $(project_name)-docs.sgml
 Path to the SGML file ? """
 
 def get_section_comments(wizard):
-    gir_file = wizard.resolve_config_path(wizard.config.get('gir_file'))
+    gir_file = wizard.config.get('gir_file')
+    if not os.path.exists(gir_file):
+        gir_file = wizard.resolve_config_path(gir_file)
+
     root = etree.parse(gir_file).getroot()
     xns = root.find("{http://www.gtk.org/introspection/core/1.0}namespace")
     ns = xns.attrib['name']
@@ -689,7 +692,10 @@ class GIExtension(BaseExtension):
 
     def __init__(self, doc_tool, config):
         BaseExtension.__init__(self, doc_tool, config)
-        self.gir_file = doc_tool.resolve_config_path(config.get('gir_file'))
+        self.gir_file = config.get('gir_file')
+        if not os.path.exists(self.gir_file):
+            self.gir_file = doc_tool.resolve_config_path(self.gir_file)
+
         self.gi_index = config.get('gi_index')
         self.languages = [l.lower() for l in config.get('languages', [])]
         self.language = 'c'
