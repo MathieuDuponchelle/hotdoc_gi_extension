@@ -392,10 +392,10 @@ class GIHtmlFormatter(HtmlFormatter):
                                 'constant': constant})
         return (out, False)
 
-    def _get_assets_path(self):
+    def get_assets_path(self):
         return os.path.join('..', 'assets')
 
-    def _format_page (self, page):
+    def format_page (self, page):
         new_names = {}
         if self.__gi_extension.language == 'python':
             new_names = self.__gi_extension.gir_parser.python_names
@@ -404,7 +404,7 @@ class GIHtmlFormatter(HtmlFormatter):
 
         self.doc_tool.doc_tree.page_parser.rename_headers (page,
                     new_names)
-        return HtmlFormatter._format_page (self, page)
+        return HtmlFormatter.format_page (self, page)
 
     def set_fundamentals(self, language):
         if language == 'python':
