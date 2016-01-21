@@ -232,6 +232,16 @@ class GIRParser(object):
         hierarchy.reverse()
         return hierarchy
 
+    def __find_gir_file(self, gir_name):
+        xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
+        xdg_dirs = [p for p in xdg_dirs.split(':') if p]
+        xdg_dirs.append(self.doc_tool.datadir)
+        for dir_ in xdg_dirs:
+            gir_file = os.path.join(dir_, 'gir-1.0', gir_name)
+            if os.path.exists(gir_file):
+                return gir_file
+        return None
+
     def __parse_gir_file (self, gir_file):
         if gir_file in self.parsed_files:
             return
@@ -253,7 +263,7 @@ class GIRParser(object):
             elif child.tag == "{http://www.gtk.org/introspection/core/1.0}include":
                 inc_name = child.attrib["name"]
                 inc_version = child.attrib["version"]
-                gir_file = os.path.join (self.doc_tool.datadir, 'gir-1.0', '%s-%s.gir' % (inc_name,
+                gir_file = self.__find_gir_file('%s-%s.gir' % (inc_name,
                     inc_version))
                 self.__parse_gir_file (gir_file)
 
