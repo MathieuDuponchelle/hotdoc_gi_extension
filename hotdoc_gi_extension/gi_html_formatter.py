@@ -190,19 +190,19 @@ class GIHtmlFormatter(HtmlFormatter):
         return HtmlFormatter._format_type_tokens (self, type_tokens)
 
     def _format_return_value_symbol (self, retval):
-        is_void = retval[0].get_extension_attribute('gi-extension',
-                'gi_name') == 'none'
+        is_void = retval[0] is None or \
+                retval[0].get_extension_attribute('gi-extension',
+                        'gi_name') == 'none'
 
         if self.__gi_extension.language == 'c':
             if is_void:
-                return HtmlFormatter._format_return_value_symbol (self, [])
+                retval = [None]
             else:
-                return HtmlFormatter._format_return_value_symbol (self,
-                        retval[:1])
-        if is_void:
-            return HtmlFormatter._format_return_value_symbol (self, retval[1:])
-        else:
-            return HtmlFormatter._format_return_value_symbol (self, retval)
+                retval = retval[:1]
+        elif is_void:
+            retval = retval[1:] or [None]
+
+        return HtmlFormatter._format_return_value_symbol (self, retval)
 
     def _format_parameter_symbol (self, parameter):
         if self.__gi_extension.language != 'c':
