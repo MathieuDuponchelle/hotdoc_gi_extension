@@ -190,37 +190,19 @@ class GIHtmlFormatter(HtmlFormatter):
         return HtmlFormatter._format_type_tokens (self, type_tokens)
 
     def _format_return_value_symbol (self, retval):
+        is_void = retval[0].get_extension_attribute('gi-extension',
+                'gi_name') == 'none'
+
         if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_return_value_symbol (self, retval)
-
-        out_parameters = retval.get_extension_attribute ('gi-extension',
-                'out_parameters')
-
-        if out_parameters is None:
-            return HtmlFormatter._format_return_value_symbol (self, retval)
-
-        gi_name = retval.get_extension_attribute ('gi-extension',
-                'gi_name')
-
-        return_values = []
-
-        if gi_name == 'none':
-            retval = None
+            if is_void:
+                return HtmlFormatter._format_return_value_symbol (self, [])
+            else:
+                return HtmlFormatter._format_return_value_symbol (self,
+                        retval[:1])
+        if is_void:
+            return HtmlFormatter._format_return_value_symbol (self, retval[1:])
         else:
-            retval.formatted_link = self._format_linked_symbol(retval)
-            return_values.append (retval)
-
-        for param in out_parameters:
-            param.resolve_links(self.doc_tool.link_resolver)
-            self.format_symbol (param)
-            param.formatted_link = self._format_linked_symbol(param)
-            return_values.append (param)
-
-        if not return_values:
-            return (False, None)
-
-        template = self.engine.get_template ('multi_return_value.html')
-        return (template.render ({'return_values': return_values}), False)
+            return HtmlFormatter._format_return_value_symbol (self, retval)
 
     def _format_parameter_symbol (self, parameter):
         if self.__gi_extension.language != 'c':

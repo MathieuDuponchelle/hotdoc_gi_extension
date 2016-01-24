@@ -914,7 +914,7 @@ class GIExtension(BaseExtension):
             symbol.extension_contents.pop('Annotations', None)
 
     def __formatting_symbol(self, symbol):
-        if type(symbol) in [ReturnValueSymbol, ParameterSymbol]:
+        if type(symbol) in [ReturnItemSymbol, ParameterSymbol]:
             self.__add_annotations (symbol)
 
         if isinstance (symbol, QualifiedSymbol):
@@ -1054,7 +1054,7 @@ class GIExtension(BaseExtension):
 
         return res, direction
 
-    def __create_return_value_symbol (self, gi_retval, comment):
+    def __create_return_value_symbol (self, gi_retval, comment, out_parameters):
         if comment:
             return_tag = comment.tags.get ('returns', None)
             return_comment = comment_from_tag (return_tag)
@@ -1063,8 +1063,15 @@ class GIExtension(BaseExtension):
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(gi_retval)
 
-        res = ReturnValueSymbol (type_tokens=type_tokens, comment=return_comment)
-        res.add_extension_attribute ('gi-extension', 'gi_name', gi_name)
+        ret_item = ReturnItemSymbol (type_tokens=type_tokens, comment=return_comment)
+        ret_item.add_extension_attribute ('gi-extension', 'gi_name', gi_name)
+
+        res = [ret_item]
+
+        for out_param in out_parameters:
+            ret_item = ReturnItemSymbol (type_tokens=out_param.input_tokens,
+                    comment=out_param.comment, name=out_param.argname)
+            res.append(ret_item)
 
         return res
 
@@ -1095,8 +1102,7 @@ class GIExtension(BaseExtension):
                 out_parameters.append (param)
 
         retval = node.find('{http://www.gtk.org/introspection/core/1.0}return-value')
-        retval = self.__create_return_value_symbol (retval, comment)
-        retval.add_extension_attribute ('gi-extension', 'out_parameters',
+        retval = self.__create_return_value_symbol (retval, comment,
                 out_parameters)
 
         return (parameters, retval)
@@ -1118,9 +1124,6 @@ class GIExtension(BaseExtension):
 
         symbol.add_extension_attribute ('gi-extension',
                 'parameters', in_parameters)
-
-        retval.add_extension_attribute('gi-extension', 'out_parameters',
-                out_parameters)
 
     def __create_signal_symbol (self, node, object_name, name):
         unique_name = '%s::%s' % (object_name, name)
@@ -1228,6 +1231,8 @@ class GIExtension(BaseExtension):
         gi_params, retval = self.__create_parameters_and_retval (gi_info.node,
                 func.comment)
 
+        func.return_value = retval
+
         func_parameters = func.parameters
 
         if 'throws' in gi_info.node.attrib:
@@ -1243,12 +1248,6 @@ class GIExtension(BaseExtension):
                     'direction')
             param.add_extension_attribute('gi-extension', 'direction',
                     direction)
-
-        gi_name = retval.get_extension_attribute ('gi-extension',
-                'gi_name')
-
-        func.return_value.add_extension_attribute ('gi-extension', 'gi_name',
-                gi_name)
 
         self.__sort_parameters (func, func.return_value, func_parameters)
 
