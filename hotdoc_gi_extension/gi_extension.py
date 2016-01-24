@@ -703,7 +703,7 @@ class GIExtension(BaseExtension):
     def __init__(self, doc_tool, config):
         BaseExtension.__init__(self, doc_tool, config)
         self.gir_file = config.get('gir_file')
-        if not os.path.exists(self.gir_file):
+        if self.gir_file and not os.path.exists(self.gir_file):
             self.gir_file = doc_tool.resolve_config_path(self.gir_file)
 
         self.gi_index = config.get('gi_index')
