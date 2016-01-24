@@ -961,20 +961,28 @@ class GIExtension(BaseExtension):
         except KeyError:
             pass
 
-        if language == 'c':
+        try:
+            self.doc_tool.doc_tree.page_parser.renaming_page_link_signal.disconnect(
+                    self.__rename_page_link)
+        except KeyError:
+            pass
+
+        if language is not None:
             Link.resolving_link_signal.connect(self.__translate_link_ref)
             Link.resolving_title_signal.connect(self.__translate_link_title)
+            self.doc_tool.doc_tree.page_parser.renaming_page_link_signal.connect(
+                    self.__rename_page_link)
+
+        if language == 'c':
             self.__translated_names = self.gir_parser.c_names
         elif language == 'python':
-            Link.resolving_link_signal.connect(self.__translate_link_ref)
-            Link.resolving_title_signal.connect(self.__translate_link_title)
             self.__translated_names = self.gir_parser.python_names
         elif language == 'javascript':
             self.__translated_names = self.gir_parser.javascript_names
-            Link.resolving_link_signal.connect(self.__translate_link_ref)
-            Link.resolving_title_signal.connect(self.__translate_link_title)
         else:
             self.__translated_names = {}
+
+
 
     def __unnest_type (self, parameter):
         array_nesting = 0
@@ -1303,6 +1311,9 @@ class GIExtension(BaseExtension):
             res = self.__update_struct (symbol)
 
         return res
+
+    def __rename_page_link (self, page_parser, original_name):
+        return self.__translated_names.get(original_name)
 
     @staticmethod
     def get_dependencies ():
