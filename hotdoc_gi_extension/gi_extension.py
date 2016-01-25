@@ -1300,7 +1300,10 @@ class GIExtension(BaseExtension):
 
         return symbols
 
-    def __adding_symbol (self, page, symbol):
+    def __resolving_symbol (self, page, symbol):
+        if page.extension_name != self.EXTENSION_NAME:
+            return []
+
         res = []
 
         if isinstance (symbol, FunctionSymbol):
@@ -1331,7 +1334,7 @@ class GIExtension(BaseExtension):
         self.__gather_gtk_doc_links()
         self.gir_parser = GIRParser (self.doc_tool, self.gir_file)
         formatter = self.get_formatter(self.doc_tool.output_format)
-        self.doc_tool.doc_tree.symbol_added_signal.connect (self.__adding_symbol)
+        Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
 def get_extension_classes():
