@@ -16,6 +16,11 @@ class GIHtmlFormatter(HtmlFormatter):
         self.python_fundamentals = self.__create_python_fundamentals()
         self.javascript_fundamentals = self.__create_javascript_fundamentals()
         self.c_fundamentals = {}
+        for c_name, link in self.python_fundamentals.iteritems():
+            link.id_ = c_name
+            elink = self.doc_tool.link_resolver.get_named_link(link.id_)
+            if elink:
+                self.c_fundamentals[c_name] = Link(elink.ref, elink.title, None)
 
     def __create_javascript_fundamentals(self):
         string_link = \
@@ -392,7 +397,6 @@ class GIHtmlFormatter(HtmlFormatter):
             self.doc_tool.link_resolver.upsert_link(link, overwrite_ref=True)
 
     def patch_page(self, page, symbol):
-        self.doc_tool.update_doc_parser(page.extension_name)
         symbol.update_children_comments()
         for l in self.__gi_extension.languages:
             self.set_fundamentals(l)
@@ -411,27 +415,6 @@ class GIHtmlFormatter(HtmlFormatter):
 
             with open(page_path, 'w') as f:
                 tree.write_c14n(f)
-
-        self.__gi_extension.setup_language(None)
-        self.set_fundamentals('c')
-
-    def format (self, page):
-        if not self.c_fundamentals:
-            for c_name, link in self.python_fundamentals.iteritems():
-                link.id_ = c_name
-                elink = self.doc_tool.link_resolver.get_named_link(link.id_)
-                if elink:
-                    self.c_fundamentals[c_name] = Link(elink.ref, elink.title, None)
-
-        for l in self.__gi_extension.languages:
-            print "Building %s documentation" % l
-            self.set_fundamentals(l)
-
-            self.__gi_extension.setup_language (l)
-            self._output = os.path.join (self.doc_tool.output, l)
-            if not os.path.exists (self._output):
-                os.mkdir (self._output)
-            HtmlFormatter.format (self, page)
 
         self.__gi_extension.setup_language(None)
         self.set_fundamentals('c')

@@ -903,19 +903,19 @@ class GIExtension(BaseExtension):
                 members.append(m)
         symbol.members = members
 
-    def __add_annotations (self, symbol):
+    def __add_annotations (self, formatter, symbol):
         if self.language == 'c':
             annotations = self.__make_annotations (symbol)
 
             # FIXME: OK this is format time but still seems strange
-            extra_content = self.doc_tool.formatter._format_annotations (annotations)
+            extra_content = formatter._format_annotations (annotations)
             symbol.extension_contents['Annotations'] = extra_content
         else:
             symbol.extension_contents.pop('Annotations', None)
 
-    def __formatting_symbol(self, symbol):
+    def __formatting_symbol(self, formatter, symbol):
         if type(symbol) in [ReturnItemSymbol, ParameterSymbol]:
-            self.__add_annotations (symbol)
+            self.__add_annotations (formatter, symbol)
 
         if isinstance (symbol, QualifiedSymbol):
             return
@@ -981,8 +981,6 @@ class GIExtension(BaseExtension):
             self.__translated_names = self.gir_parser.javascript_names
         else:
             self.__translated_names = {}
-
-
 
     def __unnest_type (self, parameter):
         array_nesting = 0
@@ -1336,6 +1334,20 @@ class GIExtension(BaseExtension):
         formatter = self.get_formatter(self.doc_tool.output_format)
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
+
+    def format_page(self, page):
+        formatter = self.get_formatter('html')
+        for l in self.languages:
+            formatter.set_fundamentals(l)
+
+            self.setup_language (l)
+            formatter._output = os.path.join (self.doc_tool.output, l)
+            if not os.path.exists (formatter._output):
+                os.mkdir (formatter._output)
+            BaseExtension.format_page (self, page)
+
+        self.setup_language(None)
+        formatter.set_fundamentals('c')
 
 def get_extension_classes():
     return [GIExtension]
