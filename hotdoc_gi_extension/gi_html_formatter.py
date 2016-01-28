@@ -16,6 +16,8 @@ class GIHtmlFormatter(HtmlFormatter):
         self.python_fundamentals = self.__create_python_fundamentals()
         self.javascript_fundamentals = self.__create_javascript_fundamentals()
         self.c_fundamentals = {}
+
+    def create_c_fundamentals(self):
         for c_name, link in self.python_fundamentals.iteritems():
             link.id_ = c_name
             elink = self.doc_tool.link_resolver.get_named_link(link.id_)

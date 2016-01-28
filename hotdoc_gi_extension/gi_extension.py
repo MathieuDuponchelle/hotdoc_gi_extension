@@ -152,6 +152,7 @@ class GIClassInfo(GIInfo):
 class GIRParser(object):
     def __init__(self, doc_tool, gir_file):
         self.namespace = None
+        self.identifier_prefix = None
         self.gir_class_infos = {}
         self.gir_callable_infos = {}
         self.python_names = {}
@@ -254,6 +255,7 @@ class GIRParser(object):
         if self.namespace is None:
             ns = root.find("{http://www.gtk.org/introspection/core/1.0}namespace")
             self.namespace = ns.attrib['name']
+            self.identifier_prefix = ns.attrib['{http://www.gtk.org/introspection/c/1.0}identifier-prefixes']
 
         nsmap = {k:v for k,v in root.nsmap.iteritems() if k}
         self.nsmap = nsmap
@@ -793,6 +795,7 @@ class GIExtension(BaseExtension):
                         href = filename
 
                     link = Link (href, title, title)
+
                     self.doc_tool.link_resolver.upsert_link (link, external=True)
 
     def __make_type_annotation (self, annotation, value):
@@ -1200,8 +1203,8 @@ class GIExtension(BaseExtension):
     def __create_class_symbol (self, symbol, gi_name):
         comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
         class_comment = self.doc_tool.get_comment(comment_name)
-        hierarchy = self.gir_parser.gir_hierarchies.get (gi_name)
-        children = self.gir_parser.gir_children_map.get (gi_name)
+        hierarchy = self.gir_parser.gir_hierarchies[gi_name]
+        children = self.gir_parser.gir_children_map[gi_name]
 
         if class_comment:
             class_symbol = self.doc_tool.get_or_create_symbol(ClassSymbol,
@@ -1250,7 +1253,7 @@ class GIExtension(BaseExtension):
         self.__sort_parameters (func, func.return_value, func_parameters)
 
     def __update_struct (self, symbol):
-        split = symbol.display_name.split(self.gir_parser.namespace)
+        split = symbol.display_name.split(self.gir_parser.identifier_prefix)
         if len (split) < 2:
             return []
 
@@ -1332,6 +1335,7 @@ class GIExtension(BaseExtension):
         self.__gather_gtk_doc_links()
         self.gir_parser = GIRParser (self.doc_tool, self.gir_file)
         formatter = self.get_formatter(self.doc_tool.output_format)
+        formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
