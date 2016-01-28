@@ -403,7 +403,7 @@ class GIHtmlFormatter(HtmlFormatter):
         for l in self.__gi_extension.languages:
             self.set_fundamentals(l)
             self.__gi_extension.setup_language (l)
-            self.format_symbol(symbol)
+            self.format_symbol(symbol, self.doc_tool.link_resolver)
 
             parser = lxml.etree.XMLParser(encoding='utf-8', recover=True)
             page_path = os.path.join(self.doc_tool.output, l, page.link.ref)
