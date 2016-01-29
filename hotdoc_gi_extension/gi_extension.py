@@ -164,6 +164,7 @@ class GIRParser(object):
         self.gir_types = {}
         self.global_hierarchy = None
         self.doc_tool = doc_tool
+        self.nsmap = {}
 
         self.parsed_files = []
 
@@ -257,11 +258,10 @@ class GIRParser(object):
             self.namespace = ns.attrib['name']
             self.identifier_prefix = ns.attrib['{http://www.gtk.org/introspection/c/1.0}identifier-prefixes']
 
-        nsmap = {k:v for k,v in root.nsmap.iteritems() if k}
-        self.nsmap = nsmap
+        self.nsmap.update({k:v for k,v in root.nsmap.iteritems() if k})
         for child in root:
             if child.tag == "{http://www.gtk.org/introspection/core/1.0}namespace":
-                self.__parse_namespace(nsmap, child)
+                self.__parse_namespace(self.nsmap, child)
             elif child.tag == "{http://www.gtk.org/introspection/core/1.0}include":
                 inc_name = child.attrib["name"]
                 inc_version = child.attrib["version"]
