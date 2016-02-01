@@ -1128,10 +1128,10 @@ class GIExtension(BaseExtension):
 
     def __create_signal_symbol (self, node, object_name, name):
         unique_name = '%s::%s' % (object_name, name)
-        comment = self.doc_tool.get_comment(unique_name)
+        comment = self.doc_tool.doc_database.get_comment(unique_name)
 
         parameters, retval = self.__create_parameters_and_retval (node, comment)
-        res = self.doc_tool.get_or_create_symbol(SignalSymbol,
+        res = self.get_or_create_symbol(SignalSymbol,
                 parameters=parameters, return_value=retval,
                 comment=comment, display_name=name, unique_name=unique_name)
 
@@ -1159,7 +1159,7 @@ class GIExtension(BaseExtension):
 
     def __create_property_symbol (self, node, object_name, name):
         unique_name = '%s:%s' % (object_name, name)
-        comment = self.doc_tool.get_comment(unique_name)
+        comment = self.doc_tool.doc_database.get_comment(unique_name)
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(node)
         type_ = QualifiedSymbol (type_tokens=type_tokens)
@@ -1178,7 +1178,7 @@ class GIExtension(BaseExtension):
         elif construct == '1':
             flags.append (ConstructFlag())
 
-        res = self.doc_tool.get_or_create_symbol(PropertySymbol,
+        res = self.get_or_create_symbol(PropertySymbol,
                 prop_type=type_, comment=comment,
                 display_name=name, unique_name=unique_name)
 
@@ -1191,7 +1191,7 @@ class GIExtension(BaseExtension):
         unique_name = '%s:::%s' % (object_name, name)
 
         parameters, retval = self.__create_parameters_and_retval (node, comment)
-        symbol = self.doc_tool.get_or_create_symbol(VFunctionSymbol,
+        symbol = self.get_or_create_symbol(VFunctionSymbol,
                 parameters=parameters, 
                 return_value=retval, comment=comment, display_name=name,
                 unique_name=unique_name)
@@ -1202,19 +1202,19 @@ class GIExtension(BaseExtension):
 
     def __create_class_symbol (self, symbol, gi_name):
         comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
-        class_comment = self.doc_tool.get_comment(comment_name)
+        class_comment = self.doc_tool.doc_database.get_comment(comment_name)
         hierarchy = self.gir_parser.gir_hierarchies[gi_name]
         children = self.gir_parser.gir_children_map[gi_name]
 
         if class_comment:
-            class_symbol = self.doc_tool.get_or_create_symbol(ClassSymbol,
+            class_symbol = self.get_or_create_symbol(ClassSymbol,
                     hierarchy=hierarchy,
                     children=children,
                     comment=class_comment,
                     display_name=symbol.display_name,
                     unique_name=comment_name)
         else:
-            class_symbol = self.doc_tool.get_or_create_symbol(ClassSymbol,
+            class_symbol = self.get_or_create_symbol(ClassSymbol,
                     hierarchy=hierarchy, children=children,
                     display_name=symbol.display_name,
                     unique_name=comment_name)
@@ -1285,7 +1285,7 @@ class GIExtension(BaseExtension):
         class_struct_name = gi_class_info.class_struct_name
         if class_struct_name:
             for vfunc_name, vfunc_node in gi_class_info.vmethods.iteritems():
-                parent_comment = self.doc_tool.get_comment(class_struct_name)
+                parent_comment = self.doc_tool.doc_database.get_comment(class_struct_name)
                 comment = None
                 if parent_comment:
                     comment = parent_comment.params.get (vfunc_node.attrib['name'])
