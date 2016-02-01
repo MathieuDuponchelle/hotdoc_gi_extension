@@ -1339,16 +1339,16 @@ class GIExtension(BaseExtension):
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
-    def format_page(self, page, link_resolver):
+    def format_page(self, page, link_resolver, output):
         formatter = self.get_formatter('html')
         for l in self.languages:
             formatter.set_fundamentals(l)
 
             self.setup_language (l)
-            formatter._output = os.path.join (self.doc_tool.output, l)
-            if not os.path.exists (formatter._output):
-                os.mkdir (formatter._output)
-            BaseExtension.format_page (self, page, link_resolver)
+            output = os.path.join (output, l)
+            if not os.path.exists (output):
+                os.mkdir (output)
+            BaseExtension.format_page (self, page, link_resolver, output)
 
         self.setup_language(None)
         formatter.set_fundamentals('c')
