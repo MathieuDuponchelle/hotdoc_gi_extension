@@ -737,7 +737,8 @@ class GIExtension(BaseExtension):
                  "default": self.__make_default_annotation,
                 }
 
-        self._formatters["html"] = GIHtmlFormatter(self.doc_tool, self)
+        self._formatters["html"] = GIHtmlFormatter(self,
+                self.doc_tool.link_resolver)
 
         self.__translated_names = {}
 

@@ -6,11 +6,12 @@ import lxml.etree
 
 
 class GIHtmlFormatter(HtmlFormatter):
-    def __init__(self, doc_tool, gi_extension):
+    def __init__(self, gi_extension, link_resolver):
         module_path = os.path.dirname(__file__)
         searchpath = [os.path.join(module_path, "templates")]
         self.__gi_extension = gi_extension
-        HtmlFormatter.__init__(self, doc_tool, searchpath)
+        self.__link_resolver = link_resolver
+        HtmlFormatter.__init__(self, searchpath)
 
         # FIXME : these links do not belong here
         self.python_fundamentals = self.__create_python_fundamentals()
@@ -20,7 +21,7 @@ class GIHtmlFormatter(HtmlFormatter):
     def create_c_fundamentals(self):
         for c_name, link in self.python_fundamentals.iteritems():
             link.id_ = c_name
-            elink = self.doc_tool.link_resolver.get_named_link(link.id_)
+            elink = self.__link_resolver.get_named_link(link.id_)
             if elink:
                 self.c_fundamentals[c_name] = Link(elink.ref, elink.title, None)
 
@@ -255,7 +256,7 @@ class GIHtmlFormatter(HtmlFormatter):
                     is_pointer, title)
 
         for param in params:
-            param.resolve_links(self.doc_tool.link_resolver)
+            param.resolve_links(self.__link_resolver)
             param.formatted_link = self._format_linked_symbol(param)
 
         c_name = function._make_name()
@@ -396,17 +397,17 @@ class GIHtmlFormatter(HtmlFormatter):
 
         for c_name, link in self.fundamentals.iteritems():
             link.id_ = c_name
-            self.doc_tool.link_resolver.upsert_link(link, overwrite_ref=True)
+            self.__link_resolver.upsert_link(link, overwrite_ref=True)
 
-    def patch_page(self, page, symbol):
+    def patch_page(self, page, symbol, output):
         symbol.update_children_comments()
         for l in self.__gi_extension.languages:
             self.set_fundamentals(l)
             self.__gi_extension.setup_language (l)
-            self.format_symbol(symbol, self.doc_tool.link_resolver)
+            self.format_symbol(symbol, self.__link_resolver)
 
             parser = lxml.etree.XMLParser(encoding='utf-8', recover=True)
-            page_path = os.path.join(self.doc_tool.output, l, page.link.ref)
+            page_path = os.path.join(output, l, page.link.ref)
             tree = lxml.etree.parse(page_path, parser)
             root = tree.getroot()
             elems = root.findall('.//div[@id="%s"]' % symbol.unique_name)
