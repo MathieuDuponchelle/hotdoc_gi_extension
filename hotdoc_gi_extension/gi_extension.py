@@ -7,6 +7,8 @@ from lxml import etree
 from hotdoc.core.symbols import *
 from hotdoc.core.comment_block import Comment, comment_from_tag
 from hotdoc.core.base_extension import BaseExtension, ExtDependency
+from hotdoc.core.base_formatter import Formatter
+from hotdoc.core.file_includer import find_md_file
 from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.gtk_doc_parser import GtkDocParser
@@ -1326,8 +1328,7 @@ class GIExtension(BaseExtension):
         return [ExtDependency('c-extension', upstream=True)]
 
     def gi_index_handler (self, doc_tree):
-        index_path = os.path.join(doc_tree.prefix, self.gi_index)
-        index_path = self.doc_tool.resolve_config_path(index_path)
+        index_path = find_md_file(self.gi_index, self.doc_tool.include_paths)
 
         return index_path, 'c', 'gi-extension'
 
@@ -1340,7 +1341,7 @@ class GIExtension(BaseExtension):
         formatter = self.get_formatter(self.doc_tool.output_format)
         formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
-        formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
+        Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
     def format_page(self, page, link_resolver, output):
         formatter = self.get_formatter('html')
