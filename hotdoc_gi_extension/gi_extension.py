@@ -1065,8 +1065,10 @@ class GIExtension(BaseExtension):
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(gi_retval)
 
-        ret_item = ReturnItemSymbol (type_tokens=type_tokens, comment=return_comment)
-        ret_item.add_extension_attribute ('gi-extension', 'gi_name', gi_name)
+        if gi_name == 'none':
+            ret_item = None
+        else:
+            ret_item = ReturnItemSymbol (type_tokens=type_tokens, comment=return_comment)
 
         res = [ret_item]
 
@@ -1223,7 +1225,7 @@ class GIExtension(BaseExtension):
         return class_symbol
 
     def __update_function (self, func):
-        gi_info = self.gir_parser.gir_callable_infos.get(func.link.id_)
+        gi_info = self.gir_parser.gir_callable_infos.get(func.unique_name)
 
         if not gi_info:
             return

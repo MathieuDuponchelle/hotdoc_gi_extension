@@ -256,7 +256,7 @@ class GIHtmlFormatter(HtmlFormatter):
                     is_pointer, title)
 
         for param in params:
-            param.resolve_links(self.__link_resolver)
+            #param.resolve_links(self.__link_resolver)
             param.formatted_link = self._format_linked_symbol(param)
 
         c_name = function._make_name()
