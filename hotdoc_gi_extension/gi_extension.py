@@ -11,8 +11,9 @@ from hotdoc.core.base_formatter import Formatter
 from hotdoc.core.file_includer import find_md_file
 from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
-from hotdoc.core.gtk_doc_parser import GtkDocParser
 from hotdoc.core.wizard import HotdocWizard
+
+from hotdoc.parsers.gtk_doc_parser import GtkDocStringFormatter
 
 from hotdoc.utils.wizard import Skip
 from hotdoc.utils.patcher import Patcher
@@ -543,7 +544,7 @@ def get_section_comments(wizard):
         class_names.add(ns + xclass.attrib['name'])
 
     sections = parse_sections('hotdoc-tmp-sections.txt')
-    translator = GtkDocParser()
+    translator = GtkDocStringFormatter()
 
     section_comments = {}
     class_comments = []
@@ -569,10 +570,11 @@ def get_section_comments(wizard):
                 continue
 
         comment.raw_comment = ''
-        comment.description = translator.translate(comment.description)
+        comment.description = translator.translate(comment.description,
+                'markdown')
         if comment.short_description:
             comment.short_description = \
-            translator.translate(comment.short_description)
+            translator.translate(comment.short_description, 'markdown')
         section_comments[structure_name] = comment
 
     return section_comments, class_comments

@@ -1,5 +1,5 @@
 import os
-from hotdoc.formatters.html.html_formatter import HtmlFormatter
+from hotdoc.formatters.html_formatter import HtmlFormatter
 from hotdoc.core.links import Link
 from hotdoc.core.symbols import *
 import lxml.etree
