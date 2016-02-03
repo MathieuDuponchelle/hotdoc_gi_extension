@@ -382,7 +382,7 @@ class GIHtmlFormatter(HtmlFormatter):
                                 'constant': constant})
         return (out, False)
 
-    def get_assets_path(self):
+    def _get_assets_path(self):
         return os.path.join('..', 'assets')
 
     def set_fundamentals(self, language):

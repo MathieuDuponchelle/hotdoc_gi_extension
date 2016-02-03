@@ -153,7 +153,7 @@ class GIClassInfo(GIInfo):
 
 # FIXME: this code is quite a mess
 class GIRParser(object):
-    def __init__(self, doc_tool, gir_file):
+    def __init__(self, doc_repo, gir_file):
         self.namespace = None
         self.identifier_prefix = None
         self.gir_class_infos = {}
@@ -166,7 +166,7 @@ class GIRParser(object):
         self.gir_hierarchies = {}
         self.gir_types = {}
         self.global_hierarchy = None
-        self.doc_tool = doc_tool
+        self.doc_repo = doc_repo
         self.nsmap = {}
 
         self.parsed_files = []
@@ -240,7 +240,7 @@ class GIRParser(object):
     def __find_gir_file(self, gir_name):
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
         xdg_dirs = [p for p in xdg_dirs.split(':') if p]
-        xdg_dirs.append(self.doc_tool.datadir)
+        xdg_dirs.append(self.doc_repo.datadir)
         for dir_ in xdg_dirs:
             gir_file = os.path.join(dir_, 'gir-1.0', gir_name)
             if os.path.exists(gir_file):
@@ -706,18 +706,18 @@ class GIWizard(HotdocWizard):
 class GIExtension(BaseExtension):
     EXTENSION_NAME = "gi-extension"
 
-    def __init__(self, doc_tool, config):
-        BaseExtension.__init__(self, doc_tool, config)
+    def __init__(self, doc_repo, config):
+        BaseExtension.__init__(self, doc_repo, config)
         self.gir_file = config.get('gir_file')
         if self.gir_file and not os.path.exists(self.gir_file):
-            self.gir_file = doc_tool.resolve_config_path(self.gir_file)
+            self.gir_file = doc_repo.resolve_config_path(self.gir_file)
 
         self.gi_index = config.get('gi_index')
         self.languages = [l.lower() for l in config.get('languages', [])]
         self.language = 'c'
         self.gir_parser = None
 
-        doc_tool.doc_tree.page_parser.register_well_known_name ('gobject-api',
+        doc_repo.doc_tree.page_parser.register_well_known_name ('gobject-api',
                 self.gi_index_handler)
 
         # Make sure C always gets formatted first
@@ -741,8 +741,8 @@ class GIExtension(BaseExtension):
                  "default": self.__make_default_annotation,
                 }
 
-        self._formatters["html"] = GIHtmlFormatter(self,
-                self.doc_tool.link_resolver)
+        self.formatters["html"] = GIHtmlFormatter(self,
+                self.doc_repo.link_resolver)
 
         self.__translated_names = {}
 
@@ -765,7 +765,7 @@ class GIExtension(BaseExtension):
                 finalize_function=HotdocWizard.finalize_path)
 
     def __gather_gtk_doc_links (self):
-        sgml_dir = os.path.join(self.doc_tool.datadir, "gtk-doc", "html")
+        sgml_dir = os.path.join(self.doc_repo.datadir, "gtk-doc", "html")
         if not os.path.exists(sgml_dir):
             print "no gtk doc to gather links from in %s" % sgml_dir
             return
@@ -801,7 +801,7 @@ class GIExtension(BaseExtension):
 
                     link = Link (href, title, title)
 
-                    self.doc_tool.link_resolver.upsert_link (link, external=True)
+                    self.doc_repo.link_resolver.upsert_link (link, external=True)
 
     def __make_type_annotation (self, annotation, value):
         if not value:
@@ -970,7 +970,7 @@ class GIExtension(BaseExtension):
             pass
 
         try:
-            self.doc_tool.doc_tree.page_parser.renaming_page_link_signal.disconnect(
+            self.doc_repo.doc_tree.page_parser.renaming_page_link_signal.disconnect(
                     self.__rename_page_link)
         except KeyError:
             pass
@@ -978,7 +978,7 @@ class GIExtension(BaseExtension):
         if language is not None:
             Link.resolving_link_signal.connect(self.__translate_link_ref)
             Link.resolving_title_signal.connect(self.__translate_link_title)
-            self.doc_tool.doc_tree.page_parser.renaming_page_link_signal.connect(
+            self.doc_repo.doc_tree.page_parser.renaming_page_link_signal.connect(
                     self.__rename_page_link)
 
         if language == 'c':
@@ -1135,7 +1135,7 @@ class GIExtension(BaseExtension):
 
     def __create_signal_symbol (self, node, object_name, name):
         unique_name = '%s::%s' % (object_name, name)
-        comment = self.doc_tool.doc_database.get_comment(unique_name)
+        comment = self.doc_repo.doc_database.get_comment(unique_name)
 
         parameters, retval = self.__create_parameters_and_retval (node, comment)
         res = self.get_or_create_symbol(SignalSymbol,
@@ -1157,7 +1157,7 @@ class GIExtension(BaseExtension):
             flags.append (NoHooksFlag())
 
         # This is incorrect, it's not yet format time
-        extra_content = self.get_formatter(self.doc_tool.output_format)._format_flags (flags)
+        extra_content = self.get_formatter(self.doc_repo.output_format)._format_flags (flags)
         res.extension_contents['Flags'] = extra_content
 
         self.__sort_parameters (res, retval, parameters)
@@ -1166,7 +1166,7 @@ class GIExtension(BaseExtension):
 
     def __create_property_symbol (self, node, object_name, name):
         unique_name = '%s:%s' % (object_name, name)
-        comment = self.doc_tool.doc_database.get_comment(unique_name)
+        comment = self.doc_repo.doc_database.get_comment(unique_name)
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(node)
         type_ = QualifiedSymbol (type_tokens=type_tokens)
@@ -1189,7 +1189,7 @@ class GIExtension(BaseExtension):
                 prop_type=type_, comment=comment,
                 display_name=name, unique_name=unique_name)
 
-        extra_content = self.get_formatter(self.doc_tool.output_format)._format_flags (flags)
+        extra_content = self.get_formatter(self.doc_repo.output_format)._format_flags (flags)
         res.extension_contents['Flags'] = extra_content
 
         return res
@@ -1209,7 +1209,7 @@ class GIExtension(BaseExtension):
 
     def __create_class_symbol (self, symbol, gi_name):
         comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
-        class_comment = self.doc_tool.doc_database.get_comment(comment_name)
+        class_comment = self.doc_repo.doc_database.get_comment(comment_name)
         hierarchy = self.gir_parser.gir_hierarchies[gi_name]
         children = self.gir_parser.gir_children_map[gi_name]
 
@@ -1292,7 +1292,7 @@ class GIExtension(BaseExtension):
         class_struct_name = gi_class_info.class_struct_name
         if class_struct_name:
             for vfunc_name, vfunc_node in gi_class_info.vmethods.iteritems():
-                parent_comment = self.doc_tool.doc_database.get_comment(class_struct_name)
+                parent_comment = self.doc_repo.doc_database.get_comment(class_struct_name)
                 comment = None
                 if parent_comment:
                     comment = parent_comment.params.get (vfunc_node.attrib['name'])
@@ -1327,10 +1327,10 @@ class GIExtension(BaseExtension):
 
     @staticmethod
     def get_dependencies ():
-        return [ExtDependency('c-extension', upstream=True)]
+        return [ExtDependency('c-extension', is_upstream=True)]
 
     def gi_index_handler (self, doc_tree):
-        index_path = find_md_file(self.gi_index, self.doc_tool.include_paths)
+        index_path = find_md_file(self.gi_index, self.doc_repo.include_paths)
 
         return index_path, 'c', 'gi-extension'
 
@@ -1339,8 +1339,8 @@ class GIExtension(BaseExtension):
             return
 
         self.__gather_gtk_doc_links()
-        self.gir_parser = GIRParser (self.doc_tool, self.gir_file)
-        formatter = self.get_formatter(self.doc_tool.output_format)
+        self.gir_parser = GIRParser (self.doc_repo, self.gir_file)
+        formatter = self.get_formatter(self.doc_repo.output_format)
         formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
