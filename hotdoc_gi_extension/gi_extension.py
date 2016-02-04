@@ -720,6 +720,13 @@ class GIExtension(BaseExtension):
         doc_repo.doc_tree.page_parser.register_well_known_name ('gobject-api',
                 self.gi_index_handler)
 
+        self.__nsmap = {'core': 'http://www.gtk.org/introspection/core/1.0',
+                      'c': 'http://www.gtk.org/introspection/c/1.0',
+                      'glib': 'http://www.gtk.org/introspection/glib/1.0'}
+        self.__gir_root = etree.parse(self.gir_file).getroot()
+        self.__node_cache = {}
+        self.__cache_nodes()
+
         # Make sure C always gets formatted first
         if 'c' in self.languages:
             self.languages.remove ('c')
@@ -745,6 +752,22 @@ class GIExtension(BaseExtension):
                 self.doc_repo.link_resolver)
 
         self.__translated_names = {}
+
+    def __cache_nodes(self):
+        from datetime import datetime
+        n = datetime.now()
+        id_key = '{%s}identifier' % self.__nsmap['c']
+        for node in self.__gir_root.xpath(
+                './/*[@c:identifier]',
+                namespaces=self.__nsmap):
+            self.__node_cache[node.attrib[id_key]] = node
+
+        id_type = '{%s}type' % self.__nsmap['c']
+        for node in self.__gir_root.xpath(
+                './/*[not(self::core:type)][@c:type]',
+                namespaces=self.__nsmap):
+            self.__node_cache[node.attrib[id_type]] = node
+        print "Took me", datetime.now() - n, "to cache all nodes"
 
     @staticmethod
     def add_arguments (parser):
@@ -1006,7 +1029,7 @@ class GIExtension(BaseExtension):
         tokens = []
         for token in qualified_type.split ():
             if token in ["const", "restrict", "volatile"]:
-                tokens.append(token)
+                tokens.append(token + ' ')
             else:
                 link = Link(None, token, token)
                 tokens.append (link)
@@ -1345,13 +1368,13 @@ class GIExtension(BaseExtension):
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
         Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
-    def format_page(self, page, link_resolver, output):
+    def format_page(self, page, link_resolver, base_output):
         formatter = self.get_formatter('html')
         for l in self.languages:
             formatter.set_fundamentals(l)
 
             self.setup_language (l)
-            output = os.path.join (output, l)
+            output = os.path.join (base_output, l)
             if not os.path.exists (output):
                 os.mkdir (output)
             BaseExtension.format_page (self, page, link_resolver, output)

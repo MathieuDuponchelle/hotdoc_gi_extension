@@ -192,7 +192,7 @@ class GIHtmlFormatter(HtmlFormatter):
             new_tokens = []
             for tok in type_tokens:
                 # FIXME : shouldn't we rather QualifiedSymbol.get_type_link() ?
-                if tok not in ['*', 'const', 'restrict', 'volatile']:
+                if tok not in ['*', 'const ', 'restrict ', 'volatile ']:
                     new_tokens.append (tok)
             return HtmlFormatter._format_type_tokens (self, new_tokens)
         return HtmlFormatter._format_type_tokens (self, type_tokens)
