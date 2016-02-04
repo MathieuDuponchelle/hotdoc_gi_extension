@@ -169,7 +169,7 @@ class GIHtmlFormatter(HtmlFormatter):
 
         return fundamentals
 
-    def _format_annotations (self, annotations):
+    def format_annotations (self, annotations):
         template = self.engine.get_template('gi_annotations.html')
         return template.render ({'annotations': annotations})
 
