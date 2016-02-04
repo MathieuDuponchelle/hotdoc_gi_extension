@@ -138,305 +138,6 @@ OPTIONAL_HELP = \
 TYPE_HELP = \
 "Override the parsed C type with given type"
 
-class GIInfo(object):
-    def __init__(self, node, parent_name):
-        self.node = node
-        self.parent_name = re.sub('\.', '', parent_name)
-
-class GIClassInfo(GIInfo):
-    def __init__(self, node, parent_name, class_struct_name, is_interface):
-        GIInfo.__init__(self, node, parent_name)
-        self.class_struct_name = class_struct_name
-        self.vmethods = {}
-        self.signals = {}
-        self.properties = {}
-        self.is_interface = is_interface
-
-# FIXME: this code is quite a mess
-class GIRParser(object):
-    def __init__(self, doc_repo, gir_file):
-        self.namespace = None
-        self.identifier_prefix = None
-        self.gir_class_infos = {}
-        self.gir_callable_infos = {}
-        self.python_names = {}
-        self.c_names = {}
-        self.javascript_names = {}
-        self.unintrospectable_symbols = {}
-        self.gir_children_map = {}
-        self.gir_hierarchies = {}
-        self.gir_types = {}
-        self.global_hierarchy = None
-        self.doc_repo = doc_repo
-        self.nsmap = {}
-
-        self.parsed_files = []
-
-        self.gir_class_map = {}
-
-        self.__parse_gir_file (gir_file)
-        self.__create_hierarchies()
-
-    def __create_hierarchies(self):
-        for gi_name, klass in self.gir_types.iteritems():
-            hierarchy = self.__create_hierarchy (klass)
-            self.gir_hierarchies[gi_name] = hierarchy
-
-        hierarchy = []
-        for c_name, klass in self.gir_class_infos.iteritems():
-            if klass.parent_name != self.namespace:
-                continue
-            if not klass.node.tag.endswith (('class', 'interface')):
-                continue
-
-            gi_name = '%s.%s' % (klass.parent_name, klass.node.attrib['name'])
-            klass_name = self.__get_klass_name (klass.node)
-            link = Link(None, klass_name, klass_name)
-            symbol = QualifiedSymbol(type_tokens=[link])
-            parents = reversed(self.gir_hierarchies[gi_name])
-            for parent in parents:
-                hierarchy.append ((parent, symbol))
-                symbol = parent
-
-        self.global_hierarchy = hierarchy
-
-    def __get_klass_name(self, klass):
-        klass_name = klass.attrib.get('{%s}type' % self.nsmap['c'])
-        if not klass_name:
-            klass_name = klass.attrib.get('{%s}type-name' % self.nsmap['glib'])
-        return klass_name
-
-    def __create_hierarchy (self, klass):
-        klaass = klass
-        hierarchy = []
-        while (True):
-            parent_name = klass.attrib.get('parent')
-            if not parent_name:
-                break
-
-            if not '.' in parent_name:
-                namespace = klass.getparent().attrib['name']
-                parent_name = '%s.%s' % (namespace, parent_name)
-            parent_class = self.gir_types[parent_name]
-            children = self.gir_children_map.get(parent_name)
-            klass_name = self.__get_klass_name (klass)
-
-            if not klass_name in children:
-                link = Link(None, klass_name, klass_name)
-                sym = QualifiedSymbol(type_tokens=[link])
-                children[klass_name] = sym
-
-            klass_name = self.__get_klass_name(parent_class)
-            link = Link(None, klass_name, klass_name)
-            sym = QualifiedSymbol(type_tokens=[link])
-            hierarchy.append (sym)
-
-            klass = parent_class
-
-        hierarchy.reverse()
-        return hierarchy
-
-    def __find_gir_file(self, gir_name):
-        xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
-        xdg_dirs = [p for p in xdg_dirs.split(':') if p]
-        xdg_dirs.append(self.doc_repo.datadir)
-        for dir_ in xdg_dirs:
-            gir_file = os.path.join(dir_, 'gir-1.0', gir_name)
-            if os.path.exists(gir_file):
-                return gir_file
-        return None
-
-    def __parse_gir_file (self, gir_file):
-        if gir_file in self.parsed_files:
-            return
-
-        self.parsed_files.append (gir_file)
-
-        tree = etree.parse (gir_file)
-        root = tree.getroot()
-
-        if self.namespace is None:
-            ns = root.find("{http://www.gtk.org/introspection/core/1.0}namespace")
-            self.namespace = ns.attrib['name']
-            self.identifier_prefix = ns.attrib['{http://www.gtk.org/introspection/c/1.0}identifier-prefixes']
-
-        self.nsmap.update({k:v for k,v in root.nsmap.iteritems() if k})
-        for child in root:
-            if child.tag == "{http://www.gtk.org/introspection/core/1.0}namespace":
-                self.__parse_namespace(self.nsmap, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}include":
-                inc_name = child.attrib["name"]
-                inc_version = child.attrib["version"]
-                gir_file = self.__find_gir_file('%s-%s.gir' % (inc_name,
-                    inc_version))
-                self.__parse_gir_file (gir_file)
-
-    def __parse_namespace (self, nsmap, ns):
-        ns_name = ns.attrib["name"]
-
-        for child in ns:
-            if child.tag == "{http://www.gtk.org/introspection/core/1.0}class":
-                self.__parse_gir_record(nsmap, ns_name, child, is_class=True)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}interface":
-                self.__parse_gir_record(nsmap, ns_name, child, is_interface=True)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}record":
-                self.__parse_gir_record(nsmap, ns_name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}callback":
-                self.__parse_gir_callback (nsmap, ns_name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}enumeration":
-                self.__parse_gir_enum (nsmap, ns_name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}bitfield":
-                self.__parse_gir_enum (nsmap, ns_name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}constant":
-                self.__parse_gir_constant (nsmap, ns_name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}function":
-                self.__parse_gir_function (nsmap, ns_name, child)
-
-    def __parse_gir_record (self, nsmap, ns_name, klass, is_interface=False,
-            is_class=False):
-        name = '%s.%s' % (ns_name, klass.attrib["name"])
-        self.gir_types[name] = klass
-        self.gir_children_map[name] = {}
-        c_name = klass.attrib.get('{%s}type' % nsmap['c'])
-        if not c_name:
-            return
-
-        class_struct_name = klass.attrib.get('{http://www.gtk.org/introspection/glib/1.0}type-struct') 
-
-        gi_class_info = GIClassInfo (klass, ns_name, '%s%s' % (ns_name,
-            class_struct_name), is_interface)
-
-        if class_struct_name:
-            self.gir_class_map['%s%s' % (ns_name, class_struct_name)] = gi_class_info
-
-        if is_class or is_interface:
-            self.gir_class_infos[c_name] = gi_class_info
-            class_name = '%s::%s' % (c_name, c_name)
-
-            self.c_names[class_name] = c_name
-            self.python_names[class_name] = name
-            self.javascript_names[class_name] = name
-
-        self.c_names[c_name] = c_name
-        self.python_names[c_name] = name
-        self.javascript_names[c_name] = name
-
-
-        for child in klass:
-            if child.tag == "{http://www.gtk.org/introspection/core/1.0}method":
-                child_cname = self.__parse_gir_function (nsmap, name, child,
-                        is_method=True)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}function":
-                child_cname = self.__parse_gir_function (nsmap, name, child)
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}constructor":
-                child_cname = self.__parse_gir_function (nsmap, name, child,
-                        is_constructor=True)
-            elif child.tag == "{http://www.gtk.org/introspection/glib/1.0}signal":
-                child_cname = self.__parse_gir_signal (nsmap, c_name, child)
-                gi_class_info.signals[child_cname] = child
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}property":
-                self.__parse_gir_property (nsmap, c_name, child)
-                gi_class_info.properties[child.attrib['name']] = child
-            elif child.tag == "{http://www.gtk.org/introspection/core/1.0}virtual-method":
-                child_cname = self.__parse_gir_vmethod (nsmap, c_name, child)
-                gi_class_info.vmethods[child_cname] = child
-
-    def __parse_gir_callable_common (self, callable_, c_id, c_name, python_name,
-            js_name, class_name, is_method=False, is_constructor=False):
-        introspectable = callable_.attrib.get('introspectable')
-
-        if introspectable == '0':
-            self.unintrospectable_symbols[c_id] = True
-
-        self.c_names[c_id] = c_name
-        self.python_names[c_id] = python_name
-        self.javascript_names[c_id] = js_name
-
-        info = GIInfo (callable_, class_name)
-        self.gir_callable_infos[c_id] = info
-
-    def __parse_gir_vmethod (self, nsmap, class_name, vmethod):
-        name = vmethod.attrib['name']
-        c_id = "%s:::%s---%s" % (class_name, name, 'vfunc')
-        self.__parse_gir_callable_common (vmethod, c_id, name, name, name,
-                class_name)
-        return name
-
-    def __parse_gir_signal (self, nsmap, class_name, signal):
-        name = signal.attrib["name"]
-        c_id = "%s:::%s---%s" % (class_name, name, 'signal')
-        self.__parse_gir_callable_common (signal, c_id, name, name, name, class_name)
-        return name
-
-    def __parse_gir_property (self, nsmap, class_name, prop):
-        name = prop.attrib["name"]
-        c_name = "%s:::%s---%s" % (class_name, name, 'property')
-
-    def __parse_gir_function (self, nsmap, class_name, function,
-            is_method=False, is_constructor=False):
-        python_name = '%s.%s' % (class_name, function.attrib['name'])
-        js_name = '%s.prototype.%s' % (class_name, function.attrib['name'])
-        c_name = function.attrib['{%s}identifier' % nsmap['c']]
-        self.__parse_gir_callable_common (function, c_name, c_name, python_name,
-                js_name, class_name, is_method=is_method,
-                is_constructor=is_constructor)
-        return c_name
-
-    def __parse_gir_callback (self, nsmap, class_name, function):
-        name = '%s.%s' % (class_name, function.attrib['name'])
-        c_name = function.attrib['{%s}type' % nsmap['c']]
-        self.gir_types[name] = function
-        self.__parse_gir_callable_common (function, c_name, c_name, name, name,
-                class_name)
-        return c_name
-
-    def __parse_gir_constant (self, nsmap, class_name, constant):
-        name = '%s.%s' % (class_name, constant.attrib['name'])
-        c_name = constant.attrib['{%s}type' % nsmap['c']]
-        self.c_names[c_name] = c_name
-        self.python_names[c_name] = name
-        self.javascript_names[c_name] = name
-
-    def __parse_gir_enum (self, nsmap, class_name, enum):
-        name = '%s.%s' % (class_name, enum.attrib['name'])
-        self.gir_types[name] = enum
-        c_name = enum.attrib['{%s}type' % nsmap['c']]
-        self.c_names[c_name] = c_name
-        self.python_names[c_name] = name
-        self.javascript_names[c_name] = name
-        for c in enum:
-            if c.tag == "{http://www.gtk.org/introspection/core/1.0}member":
-                m_name = '%s.%s' % (name, c.attrib["name"].upper())
-                c_name = c.attrib['{%s}identifier' % nsmap['c']]
-                self.c_names[c_name] = c_name
-                self.python_names[c_name] = m_name
-                self.javascript_names[c_name] = m_name
-
-    def __get_gir_type (self, name):
-        namespaced = '%s.%s' % (self.namespace, name)
-        klass = self.gir_types.get (namespaced)
-        if klass is not None:
-            return klass
-        return self.gir_types.get (name)
-
-    def type_tokens_from_gitype (self, ptype_name):
-        qs = None
-
-        if ptype_name == 'none':
-            return None
-
-        gitype = self.__get_gir_type (ptype_name)
-        if gitype is not None:
-            c_type = gitype.attrib['{http://www.gtk.org/introspection/c/1.0}type']
-            ptype_name = c_type
-
-        type_link = Link (None, ptype_name, ptype_name)
-
-        tokens = [type_link]
-        tokens += '*'
-
-        return tokens
-
 DESCRIPTION=\
 """
 Parse a gir file and add signals, properties, classes
@@ -714,7 +415,6 @@ class GIExtension(BaseExtension):
         self.gi_index = config.get('gi_index')
         self.languages = [l.lower() for l in config.get('languages', [])]
         self.language = 'c'
-        self.gir_parser = None
 
         doc_repo.doc_tree.page_parser.register_well_known_name ('gobject-api',
                 self.gi_index_handler)
@@ -1146,6 +846,39 @@ class GIExtension(BaseExtension):
 
         return tokens
 
+    def __get_gir_type (self, cur_ns, name):
+        namespaced = '%s.%s' % (cur_ns, name)
+        klass = self.__class_nodes.get (namespaced)
+        if klass is not None:
+            return klass
+        return self.__class_nodes.get (name)
+
+    def __get_namespace(self, node):
+        parent = node.getparent()
+        nstag = '{%s}namespace' % self.__nsmap['core']
+        while parent is not None and parent.tag != nstag:
+            parent = parent.getparent()
+
+        return parent.attrib['name']
+
+    def __type_tokens_from_gitype (self, cur_ns, ptype_name):
+        qs = None
+
+        if ptype_name == 'none':
+            return None
+
+        gitype = self.__get_gir_type (cur_ns, ptype_name)
+        if gitype is not None:
+            c_type = gitype.attrib['{http://www.gtk.org/introspection/c/1.0}type']
+            ptype_name = c_type
+
+        type_link = Link (None, ptype_name, ptype_name)
+
+        tokens = [type_link]
+        tokens += '*'
+
+        return tokens
+
     def __type_tokens_and_gi_name_from_gi_node (self, gi_node):
         type_, array_nesting = self.__unnest_type (gi_node)
 
@@ -1158,15 +891,17 @@ class GIExtension(BaseExtension):
             ctype_name = ptype_.attrib.get('{http://www.gtk.org/introspection/c/1.0}type')
             ptype_name = ptype_.attrib.get('name')
 
+        cur_ns = self.__get_namespace(gi_node)
+
         if ctype_name is not None:
             type_tokens = self.__type_tokens_from_cdecl (ctype_name)
         elif ptype_name is not None:
-            type_tokens = self.gir_parser.type_tokens_from_gitype (ptype_name)
+            type_tokens = self.__type_tokens_from_gitype (cur_ns, ptype_name)
         else:
             type_tokens = []
 
-        namespaced = '%s.%s' % (self.gir_parser.namespace, ptype_name)
-        if namespaced in self.gir_parser.gir_types:
+        namespaced = '%s.%s' % (cur_ns, ptype_name)
+        if namespaced in self.__class_nodes:
             ptype_name = namespaced
         return type_tokens, ptype_name
 
@@ -1520,7 +1255,6 @@ class GIExtension(BaseExtension):
             return
 
         self.__gather_gtk_doc_links()
-        self.gir_parser = GIRParser (self.doc_repo, self.gir_file)
         formatter = self.get_formatter(self.doc_repo.output_format)
         formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
