@@ -3,6 +3,7 @@ import re
 import subprocess
 
 from lxml import etree
+from collections import defaultdict
 
 from hotdoc.core.symbols import *
 from hotdoc.core.comment_block import Comment, comment_from_tag
@@ -170,8 +171,6 @@ class GIRParser(object):
         self.nsmap = {}
 
         self.parsed_files = []
-
-        self.callable_nodes = {}
 
         self.gir_class_map = {}
 
@@ -723,9 +722,26 @@ class GIExtension(BaseExtension):
         self.__nsmap = {'core': 'http://www.gtk.org/introspection/core/1.0',
                       'c': 'http://www.gtk.org/introspection/c/1.0',
                       'glib': 'http://www.gtk.org/introspection/glib/1.0'}
+
+        self.__parsed_girs = set()
         self.__gir_root = etree.parse(self.gir_file).getroot()
         self.__node_cache = {}
-        self.__cache_nodes()
+        # We need to collect all class nodes and build the
+        # hierarchy beforehand, because git class nodes do not
+        # know about their children
+        self.__class_nodes = {}
+
+        from datetime import datetime
+        n = datetime.now()
+        self.__cache_nodes(self.__gir_root)
+        self.__gir_hierarchies = {}
+        self.__gir_children_map = defaultdict(dict)
+        self.__create_hierarchies()
+        print "took me", datetime.now() - n
+
+        self.__c_names = {}
+        self.__python_names = {}
+        self.__javascript_names = {}
 
         # Make sure C always gets formatted first
         if 'c' in self.languages:
@@ -753,21 +769,113 @@ class GIExtension(BaseExtension):
 
         self.__translated_names = {}
 
-    def __cache_nodes(self):
-        from datetime import datetime
-        n = datetime.now()
+    def __find_gir_file(self, gir_name):
+        xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
+        xdg_dirs = [p for p in xdg_dirs.split(':') if p]
+        xdg_dirs.append(self.doc_repo.datadir)
+        for dir_ in xdg_dirs:
+            gir_file = os.path.join(dir_, 'gir-1.0', gir_name)
+            if os.path.exists(gir_file):
+                return gir_file
+        return None
+
+    def __cache_nodes(self, gir_root):
         id_key = '{%s}identifier' % self.__nsmap['c']
-        for node in self.__gir_root.xpath(
+        for node in gir_root.xpath(
                 './/*[@c:identifier]',
                 namespaces=self.__nsmap):
             self.__node_cache[node.attrib[id_key]] = node
 
         id_type = '{%s}type' % self.__nsmap['c']
-        for node in self.__gir_root.xpath(
-                './/*[not(self::core:type)][@c:type]',
+        class_tag = '{%s}class' % self.__nsmap['core']
+        for node in gir_root.xpath(
+                './/*[not(self::core:type) and not (self::core:array)][@c:type]',
                 namespaces=self.__nsmap):
-            self.__node_cache[node.attrib[id_type]] = node
-        print "Took me", datetime.now() - n, "to cache all nodes"
+            name = node.attrib[id_type]
+            self.__node_cache[name] = node
+            if node.tag == class_tag:
+                gi_name = '.'.join(self.__get_gi_name_components(node))
+                self.__class_nodes[gi_name] = node
+                self.__node_cache['%s::%s' % (name, name)] = node
+
+        for node in gir_root.xpath(
+                './/core:property',
+                namespaces=self.__nsmap):
+            name = '%s:%s' % (node.getparent().attrib['{%s}type' %
+                self.__nsmap['c']], node.attrib['name'])
+            self.__node_cache[name] = node
+
+        for node in gir_root.xpath(
+                './/glib:signal',
+                namespaces=self.__nsmap):
+            name = '%s::%s' % (node.getparent().attrib['{%s}type' %
+                self.__nsmap['c']], node.attrib['name'])
+            self.__node_cache[name] = node
+
+        for node in gir_root.xpath(
+                './/core:virtual-method',
+                namespaces=self.__nsmap):
+            name = '%s:::%s' % (node.getparent().attrib['{%s}type' %
+                self.__nsmap['c']], node.attrib['name'])
+            self.__node_cache[name] = node
+
+        for inc in gir_root.findall('./core:include',
+                namespaces = self.__nsmap):
+            inc_name = inc.attrib["name"]
+            inc_version = inc.attrib["version"]
+            gir_file = self.__find_gir_file('%s-%s.gir' % (inc_name,
+                inc_version))
+            if not gir_file:
+                print "Couldn't find a gir for", inc_name, inc_version
+                continue
+
+            if gir_file in self.__parsed_girs:
+                continue
+
+            self.__parsed_girs.add(gir_file)
+            inc_gir_root = etree.parse(gir_file).getroot()
+            self.__cache_nodes(inc_gir_root)
+
+    def __create_hierarchies(self):
+        for gi_name, klass in self.__class_nodes.iteritems():
+            hierarchy = self.__create_hierarchy (klass)
+            self.__gir_hierarchies[gi_name] = hierarchy
+
+    def __get_klass_name(self, klass):
+        klass_name = klass.attrib.get('{%s}type' % self.__nsmap['c'])
+        if not klass_name:
+            klass_name = klass.attrib.get('{%s}type-name' % self.__nsmap['glib'])
+        return klass_name
+
+    def __create_hierarchy (self, klass):
+        klaass = klass
+        hierarchy = []
+        while (True):
+            parent_name = klass.attrib.get('parent')
+            if not parent_name:
+                break
+
+            if not '.' in parent_name:
+                namespace = klass.getparent().attrib['name']
+                parent_name = '%s.%s' % (namespace, parent_name)
+            parent_class = self.__class_nodes[parent_name]
+            children = self.__gir_children_map[parent_name]
+            klass_name = self.__get_klass_name (klass)
+
+            if not klass_name in children:
+                link = Link(None, klass_name, klass_name)
+                sym = QualifiedSymbol(type_tokens=[link])
+                children[klass_name] = sym
+
+            klass_name = self.__get_klass_name(parent_class)
+            link = Link(None, klass_name, klass_name)
+            sym = QualifiedSymbol(type_tokens=[link])
+            hierarchy.append (sym)
+
+            klass = parent_class
+
+        hierarchy.reverse()
+        return hierarchy
 
     @staticmethod
     def add_arguments (parser):
@@ -923,17 +1031,6 @@ class GIExtension(BaseExtension):
 
         return annotations
 
-    def __remove_vmethods (self, symbol):
-        gir_class_info = self.gir_parser.gir_class_map.get(symbol._make_name())
-        if not gir_class_info:
-            return
-
-        members = []
-        for m in symbol.members:
-            if not m.member_name in gir_class_info.vmethods:
-                members.append(m)
-        symbol.members = members
-
     def __add_annotations (self, formatter, symbol):
         if self.language == 'c':
             annotations = self.__make_annotations (symbol)
@@ -944,39 +1041,49 @@ class GIExtension(BaseExtension):
         else:
             symbol.extension_contents.pop('Annotations', None)
 
+    def __is_introspectable(self, name):
+        if name in self.get_formatter('html').fundamentals:
+            return True
+
+        node = self.__node_cache.get(name)
+
+        if node is None:
+            return False
+
+        if not name in self.__c_names:
+            self.__add_translations(name, node)
+
+        if node.attrib.get('introspectable') == '0':
+            return False
+        return True
+
     def __formatting_symbol(self, formatter, symbol):
         if type(symbol) in [ReturnItemSymbol, ParameterSymbol]:
             self.__add_annotations (formatter, symbol)
 
         if isinstance (symbol, QualifiedSymbol):
-            return
-
-        # FIXME : this is not correct
-        c_name = symbol._make_name ()
-
-        if type (symbol) == StructSymbol:
-            self.__remove_vmethods(symbol)
+            return True
 
         # We discard symbols at formatting time because they might be exposed
         # in other languages
         if self.language != 'c':
-            # FIXME: maybe skip symbols that are not in the gir at all.
-            if c_name in self.gir_parser.unintrospectable_symbols:
-                return False
-            if type (symbol) in [FunctionMacroSymbol, ExportedVariableSymbol]:
-                return False
+            return self.__is_introspectable(symbol.unique_name)
 
         return True
 
     def __translate_link_ref(self, link):
-        if link.id_ in self.gir_parser.unintrospectable_symbols and self.language != 'c':
-            return '../c/' + link.ref
-        else:
+        if link.ref is None:
             return None
 
+        if self.language != 'c' and not self.__is_introspectable(link.id_):
+            return '../c/' + link.ref
+
+        return None
+
     def __translate_link_title(self, link):
-        if link.id_ in self.gir_parser.unintrospectable_symbols and self.language != 'c':
+        if self.language != 'c' and not self.__is_introspectable(link.id_):
             return link._title + ' (not introspectable)'
+
         return self.__translated_names.get(link.id_)
 
     def setup_language (self, language):
@@ -1005,11 +1112,11 @@ class GIExtension(BaseExtension):
                     self.__rename_page_link)
 
         if language == 'c':
-            self.__translated_names = self.gir_parser.c_names
+            self.__translated_names = self.__c_names
         elif language == 'python':
-            self.__translated_names = self.gir_parser.python_names
+            self.__translated_names = self.__python_names
         elif language == 'javascript':
-            self.__translated_names = self.gir_parser.javascript_names
+            self.__translated_names = self.__javascript_names
         else:
             self.__translated_names = {}
 
@@ -1156,7 +1263,8 @@ class GIExtension(BaseExtension):
         symbol.add_extension_attribute ('gi-extension',
                 'parameters', in_parameters)
 
-    def __create_signal_symbol (self, node, object_name, name):
+    def __create_signal_symbol (self, node, object_name):
+        name = node.attrib['name']
         unique_name = '%s::%s' % (object_name, name)
         comment = self.doc_repo.doc_database.get_comment(unique_name)
 
@@ -1187,7 +1295,8 @@ class GIExtension(BaseExtension):
 
         return res
 
-    def __create_property_symbol (self, node, object_name, name):
+    def __create_property_symbol (self, node, object_name):
+        name = node.attrib['name']
         unique_name = '%s:%s' % (object_name, name)
         comment = self.doc_repo.doc_database.get_comment(unique_name)
 
@@ -1217,7 +1326,8 @@ class GIExtension(BaseExtension):
 
         return res
 
-    def __create_vfunc_symbol (self, node, comment, object_name, name):
+    def __create_vfunc_symbol (self, node, comment, object_name):
+        name = node.attrib['name']
         unique_name = '%s:::%s' % (object_name, name)
 
         parameters, retval = self.__create_parameters_and_retval (node, comment)
@@ -1233,8 +1343,8 @@ class GIExtension(BaseExtension):
     def __create_class_symbol (self, symbol, gi_name):
         comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
         class_comment = self.doc_repo.doc_database.get_comment(comment_name)
-        hierarchy = self.gir_parser.gir_hierarchies[gi_name]
-        children = self.gir_parser.gir_children_map[gi_name]
+        hierarchy = self.__gir_hierarchies[gi_name]
+        children = self.__gir_children_map[gi_name]
 
         if class_comment:
             class_symbol = self.get_or_create_symbol(ClassSymbol,
@@ -1251,22 +1361,49 @@ class GIExtension(BaseExtension):
 
         return class_symbol
 
-    def __update_function (self, func):
-        gi_info = self.gir_parser.gir_callable_infos.get(func.unique_name)
+    def __get_gi_name_components(self, node):
+        parent = node.getparent()
+        components = [node.attrib['name']]
+        while parent is not None:
+            try:
+                components.insert(0, parent.attrib['name'])
+            except KeyError:
+                break
+            parent = parent.getparent()
+        return components
 
-        if not gi_info:
-            return
+    def __add_translations(self, unique_name, node):
+        id_key = '{%s}identifier' % self.__nsmap['c']
+        id_type = '{%s}type' % self.__nsmap['c']
 
-        func.is_method = gi_info.node.tag.endswith ('method')
+        components = self.__get_gi_name_components(node) 
+        gi_name = '.'.join(components)
 
-        gi_params, retval = self.__create_parameters_and_retval (gi_info.node,
+        if id_key in node.attrib:
+            self.__python_names[unique_name] = gi_name
+            components[-1] = 'prototype.%s' % components[-1]
+            self.__javascript_names[unique_name] = '.'.join(components)
+            self.__c_names[unique_name] = unique_name
+        elif id_type in node.attrib:
+            self.__python_names[unique_name] = gi_name
+            self.__javascript_names[unique_name] = gi_name
+            self.__c_names[unique_name] = unique_name
+
+        return components, gi_name
+
+    def __update_function (self, func, node):
+        func.is_method = node.tag.endswith ('method')
+
+        self.__add_translations(func.unique_name, node)
+
+        gi_params, retval = self.__create_parameters_and_retval (node,
                 func.comment)
 
         func.return_value = retval
 
         func_parameters = func.parameters
 
-        if 'throws' in gi_info.node.attrib:
+        if 'throws' in node.attrib:
             func_parameters = func_parameters[:-1]
             func.throws = True
 
@@ -1282,68 +1419,89 @@ class GIExtension(BaseExtension):
 
         self.__sort_parameters (func, func.return_value, func_parameters)
 
-    def __update_struct (self, symbol):
-        split = symbol.display_name.split(self.gir_parser.identifier_prefix)
-        if len (split) < 2:
-            return []
-
-        gi_name = '%s.%s' % (self.gir_parser.namespace, split[1])
-        if not symbol.display_name in self.gir_parser.gir_class_infos:
-            return []
-
-        gi_class_info = self.gir_parser.gir_class_infos[symbol.display_name]
-
+    def __update_struct (self, symbol, node):
         symbols = []
-        gir_node = gi_class_info.node
 
-        class_symbol = self.__create_class_symbol (symbol, gi_name)
+        components, gi_name = self.__add_translations(symbol.unique_name, node)
+        gi_name = '.'.join(components)
 
-        symbols.append (class_symbol)
+        if node.tag == '{%s}class' % self.__nsmap['core']:
+            symbols.append(self.__create_class_symbol (symbol, gi_name))
 
-        klass_name = gir_node.attrib.get('{%s}type-name' %
+        klass_name = node.attrib.get('{%s}type-name' %
                 'http://www.gtk.org/introspection/glib/1.0')
 
-        if klass_name:
-            for signal_name, signal_node in gi_class_info.signals.iteritems():
-                sym = self.__create_signal_symbol (signal_node, klass_name, signal_name)
-                symbols.append (sym)
+        for sig_node in node.findall('./glib:signal',
+                                     namespaces = self.__nsmap):
+            symbols.append(self.__create_signal_symbol(
+                sig_node, klass_name))
 
-            for prop_name, prop_node in gi_class_info.properties.iteritems():
-                sym = self.__create_property_symbol (prop_node, klass_name, prop_name)
-                symbols.append (sym)
+        for prop_node in node.findall('./core:property',
+                                     namespaces = self.__nsmap):
+            symbols.append(self.__create_property_symbol(
+                prop_node, klass_name))
 
-        class_struct_name = gi_class_info.class_struct_name
+        class_struct_name = node.attrib.get('{%s}type-struct' %
+                self.__nsmap['glib'])
+
+        parent_comment = None
         if class_struct_name:
-            for vfunc_name, vfunc_node in gi_class_info.vmethods.iteritems():
-                parent_comment = self.doc_repo.doc_database.get_comment(class_struct_name)
-                comment = None
-                if parent_comment:
-                    comment = parent_comment.params.get (vfunc_node.attrib['name'])
-                if not comment:
-                    continue
+            class_struct_name = '%s%s' % (components[0], class_struct_name)
+            parent_comment = self.doc_repo.doc_database.get_comment(class_struct_name)
 
+        vmethods = node.findall('./core:virtual-method',
+                                namespaces = self.__nsmap)
+
+        for vfunc_node in vmethods:
+            comment = None
+            block = None
+            if parent_comment:
+                comment = parent_comment.params.get (vfunc_node.attrib['name'])
                 block = Comment (name=vfunc_node.attrib['name'],
-                        description=comment.description,
-                        filename=parent_comment.filename)
-                sym = self.__create_vfunc_symbol (vfunc_node, block,
-                        klass_name, vfunc_name)
-                symbols.append (sym)
+                                 description=comment.description,
+                                 filename=parent_comment.filename)
+
+            symbols.append(self.__create_vfunc_symbol (vfunc_node, block,
+                                                       klass_name))
+
+        is_gtype_struct_for = node.attrib.get('{%s}is-gtype-struct-for' %
+                self.__nsmap['glib'])
+
+        if is_gtype_struct_for is not None:
+            is_gtype_struct_for = '%s%s' % (components[0], is_gtype_struct_for)
+            class_node = self.__node_cache.get(is_gtype_struct_for)
+            if class_node is not None:
+                vmethods = class_node.findall('./core:virtual-method',
+                                              namespaces = self.__nsmap)
+                vnames = [vmethod.attrib['name'] for vmethod in vmethods]
+                members = []
+                for m in symbol.members:
+                    if not m.member_name in vnames:
+                        members.append(m)
+                symbol.members = members
 
         return symbols
+
+    def __update_symbol(self, symbol):
+        node = self.__node_cache.get(symbol.unique_name)
+        res = []
+
+        if node is None:
+            return res
+
+        if isinstance(symbol, FunctionSymbol):
+            self.__update_function(symbol, node)
+
+        elif type (symbol) == StructSymbol:
+            res = self.__update_struct (symbol, node)
+
+        return res
 
     def __resolving_symbol (self, page, symbol):
         if page.extension_name != self.EXTENSION_NAME:
             return []
 
-        res = []
-
-        if isinstance (symbol, FunctionSymbol):
-            self.__update_function (symbol)
-
-        elif type (symbol) == StructSymbol:
-            res = self.__update_struct (symbol)
-
-        return res
+        return self.__update_symbol(symbol)
 
     def __rename_page_link (self, page_parser, original_name):
         return self.__translated_names.get(original_name)
