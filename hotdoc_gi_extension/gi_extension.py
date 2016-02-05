@@ -209,9 +209,9 @@ class GIExtension(BaseExtension):
         formatter = self.get_formatter(self.doc_repo.output_format)
         formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
-        Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
 
     def format_page(self, page, link_resolver, base_output):
+        Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
         formatter = self.get_formatter('html')
         for l in self.languages:
             formatter.set_fundamentals(l)
@@ -224,6 +224,7 @@ class GIExtension(BaseExtension):
 
         self.setup_language(None)
         formatter.set_fundamentals('c')
+        Formatter.formatting_symbol_signal.disconnect(self.__formatting_symbol)
 
     def __find_gir_file(self, gir_name):
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
@@ -414,6 +415,9 @@ class GIExtension(BaseExtension):
 
     def __translate_link_ref(self, link):
         if link.ref is None:
+            return None
+
+        if link.ref.startswith('http'):
             return None
 
         if self.language != 'c' and not self.__is_introspectable(link.id_):
