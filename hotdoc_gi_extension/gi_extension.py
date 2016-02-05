@@ -1,3 +1,32 @@
+"""A gobject-introspection extension for Hotdoc.
+
+This extension is implemented as a just-in-time "scanner".
+
+There is nearly no initial scanning done, as we limit
+ourselves to caching all the interesting gir nodes (function
+nodes, class nodes etc ..), and creating the class hierarchy
+graph.
+
+Instead of creating symbols at setup time, we create them
+at symbol resolution time, as the symbol for a given class
+will always be located in the same page as its C structure.
+
+For example, given a "TestGreeter" object, the C extension
+will create the StructSymbol for TestGreeter, and we
+will create the "TestGreeter::TestGreeter" class symbol when
+the containing page for TestGreeter will have its symbols
+resolved (ie during the initial build of the documentation,
+or when the page is stale). All properties, signals and
+virtual methods attached to this class are added too.
+
+We will also update all the callables at resolution time,
+to add gi-specific attributes to them, which the
+GIHtmlFormatter will make sense of at format-time.
+
+This approach allows incremental rebuilding to be way faster
+than the initial build.
+"""
+
 import os
 
 from lxml import etree
@@ -22,7 +51,7 @@ class Flag (object):
         self.nick = nick
         self.link = link
 
-# FIXME: is that subclassing really helpful ?
+
 class RunLastFlag (Flag):
     def __init__(self):
         Flag.__init__ (self, "Run Last",
@@ -66,6 +95,7 @@ class ConstructOnlyFlag (Flag):
     def __init__(self):
         Flag.__init__ (self, "Construct Only", None)
 
+
 DESCRIPTION=\
 """
 Parse a gir file and add signals, properties, classes
@@ -106,13 +136,10 @@ class GIExtension(BaseExtension):
         # know about their children
         self.__class_nodes = {}
 
-        from datetime import datetime
-        n = datetime.now()
         self.__cache_nodes(self.__gir_root)
         self.__gir_hierarchies = {}
         self.__gir_children_map = defaultdict(dict)
         self.__create_hierarchies()
-        print "took me", datetime.now() - n
 
         self.__c_names = {}
         self.__python_names = {}
@@ -129,6 +156,57 @@ class GIExtension(BaseExtension):
                 self.doc_repo.link_resolver)
 
         self.__translated_names = {}
+
+    @staticmethod
+    def add_arguments (parser):
+        group = parser.add_argument_group('GObject-introspection extension',
+                DESCRIPTION, wizard_class=GIWizard)
+        group.add_argument ("--gir-file", action="store",
+                dest="gir_file",
+                help="Path to the gir file of the documented library",
+                finalize_function=HotdocWizard.finalize_path)
+        group.add_argument ("--languages", action="store",
+                nargs='*',
+                help="Languages to translate documentation in (c, python, javascript)")
+        group.add_argument ("--gi-index", action="store",
+                dest="gi_index",
+                help=("Name of the gi root markdown file, you can answer None "
+                    "and follow the prompts later on to have "
+                    "one created for you"),
+                finalize_function=HotdocWizard.finalize_path)
+
+    @staticmethod
+    def get_dependencies ():
+        return [ExtDependency('c-extension', is_upstream=True)]
+
+    def gi_index_handler (self, doc_tree):
+        index_path = find_md_file(self.gi_index, self.doc_repo.include_paths)
+
+        return index_path, 'c', 'gi-extension'
+
+    def setup (self):
+        if not self.gir_file:
+            return
+
+        self.__gather_gtk_doc_links()
+        formatter = self.get_formatter(self.doc_repo.output_format)
+        formatter.create_c_fundamentals()
+        Page.resolving_symbol_signal.connect (self.__resolving_symbol)
+        Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
+
+    def format_page(self, page, link_resolver, base_output):
+        formatter = self.get_formatter('html')
+        for l in self.languages:
+            formatter.set_fundamentals(l)
+
+            self.setup_language (l)
+            output = os.path.join (base_output, l)
+            if not os.path.exists (output):
+                os.mkdir (output)
+            BaseExtension.format_page (self, page, link_resolver, output)
+
+        self.setup_language(None)
+        formatter.set_fundamentals('c')
 
     def __find_gir_file(self, gir_name):
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
@@ -237,24 +315,6 @@ class GIExtension(BaseExtension):
 
         hierarchy.reverse()
         return hierarchy
-
-    @staticmethod
-    def add_arguments (parser):
-        group = parser.add_argument_group('GObject-introspection extension',
-                DESCRIPTION, wizard_class=GIWizard)
-        group.add_argument ("--gir-file", action="store",
-                dest="gir_file",
-                help="Path to the gir file of the documented library",
-                finalize_function=HotdocWizard.finalize_path)
-        group.add_argument ("--languages", action="store",
-                nargs='*',
-                help="Languages to translate documentation in (c, python, javascript)")
-        group.add_argument ("--gi-index", action="store",
-                dest="gi_index",
-                help=("Name of the gi root markdown file, you can answer None "
-                    "and follow the prompts later on to have "
-                    "one created for you"),
-                finalize_function=HotdocWizard.finalize_path)
 
     def __gather_gtk_doc_links (self):
         sgml_dir = os.path.join(self.doc_repo.datadir, "gtk-doc", "html")
@@ -805,38 +865,6 @@ class GIExtension(BaseExtension):
     def __rename_page_link (self, page_parser, original_name):
         return self.__translated_names.get(original_name)
 
-    @staticmethod
-    def get_dependencies ():
-        return [ExtDependency('c-extension', is_upstream=True)]
-
-    def gi_index_handler (self, doc_tree):
-        index_path = find_md_file(self.gi_index, self.doc_repo.include_paths)
-
-        return index_path, 'c', 'gi-extension'
-
-    def setup (self):
-        if not self.gir_file:
-            return
-
-        self.__gather_gtk_doc_links()
-        formatter = self.get_formatter(self.doc_repo.output_format)
-        formatter.create_c_fundamentals()
-        Page.resolving_symbol_signal.connect (self.__resolving_symbol)
-        Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
-
-    def format_page(self, page, link_resolver, base_output):
-        formatter = self.get_formatter('html')
-        for l in self.languages:
-            formatter.set_fundamentals(l)
-
-            self.setup_language (l)
-            output = os.path.join (base_output, l)
-            if not os.path.exists (output):
-                os.mkdir (output)
-            BaseExtension.format_page (self, page, link_resolver, output)
-
-        self.setup_language(None)
-        formatter.set_fundamentals('c')
 
 def get_extension_classes():
     return [GIExtension]
