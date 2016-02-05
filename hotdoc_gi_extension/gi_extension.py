@@ -113,9 +113,20 @@ class GIExtension(BaseExtension):
 
     def __init__(self, doc_repo, config):
         BaseExtension.__init__(self, doc_repo, config)
-        self.gir_file = config.get('gir_file')
-        if self.gir_file and not os.path.exists(self.gir_file):
-            self.gir_file = doc_repo.resolve_config_path(self.gir_file)
+        self.gir_files = []
+
+        gir_file = config.get('gir_file')
+        if gir_file:
+            if not os.path.exists(gir_file):
+                gir_file = doc_repo.resolve_config_path(gir_file)
+            self.gir_files.append(gir_file)
+
+        gir_files = config.get('gir_files', [])
+        for gir_file in gir_files:
+            if gir_file:
+                if not os.path.exists(gir_file):
+                    gir_file = doc_repo.resolve_config_path(gir_file)
+                self.gir_files.append(gir_file)
 
         self.gi_index = config.get('gi_index')
         self.languages = [l.lower() for l in config.get('languages', [])]
@@ -129,14 +140,16 @@ class GIExtension(BaseExtension):
                       'glib': 'http://www.gtk.org/introspection/glib/1.0'}
 
         self.__parsed_girs = set()
-        self.__gir_root = etree.parse(self.gir_file).getroot()
         self.__node_cache = {}
         # We need to collect all class nodes and build the
         # hierarchy beforehand, because git class nodes do not
         # know about their children
         self.__class_nodes = {}
 
-        self.__cache_nodes(self.__gir_root)
+        for gir_file in self.gir_files:
+            gir_root = etree.parse(gir_file).getroot()
+            self.__cache_nodes(gir_root)
+
         self.__gir_hierarchies = {}
         self.__gir_children_map = defaultdict(dict)
         self.__create_hierarchies()
@@ -163,8 +176,12 @@ class GIExtension(BaseExtension):
                 DESCRIPTION, wizard_class=GIWizard)
         group.add_argument ("--gir-file", action="store",
                 dest="gir_file",
-                help="Path to the gir file of the documented library",
+                help="Deprecated, use --gir-files instead",
                 finalize_function=HotdocWizard.finalize_path)
+        group.add_argument ("--gir-files", action="store", nargs="+",
+                dest="gir_files", help="Gir files to parse",
+                no_prompt=True,
+                finalize_function=HotdocWizard.finalize_paths)
         group.add_argument ("--languages", action="store",
                 nargs='*',
                 help="Languages to translate documentation in (c, python, javascript)")
@@ -185,7 +202,7 @@ class GIExtension(BaseExtension):
         return index_path, 'c', 'gi-extension'
 
     def setup (self):
-        if not self.gir_file:
+        if not self.gir_files:
             return
 
         self.__gather_gtk_doc_links()
