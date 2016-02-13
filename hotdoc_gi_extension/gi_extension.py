@@ -185,7 +185,7 @@ class GIExtension(BaseExtension):
                 if not os.path.exists(gir_file):
                     gir_file = doc_repo.resolve_config_path(gir_file)
                 GIExtension.gir_files.append(gir_file)
-        GIExtension.gi_index = config.get('gi_index')
+        GIExtension.index = config.get('gi_index')
         GIExtension.languages = [l.lower() for l in config.get(
             'languages', [])]
         # Make sure C always gets formatted first
@@ -203,7 +203,7 @@ class GIExtension(BaseExtension):
                  'Well-known-name gi-index encountered, but "gi_index" is '
                  'missing')
             return None
-        index_path = find_md_file(GIExtension.gi_index, self.doc_repo.include_paths)
+        index_path = find_md_file(GIExtension.index, self.doc_repo.include_paths)
 
         return index_path, 'c', 'gi-extension'
 
