@@ -41,6 +41,8 @@ from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.wizard import HotdocWizard
 
+from hotdoc.utils.loggable import warn
+
 from .gi_html_formatter import GIHtmlFormatter
 from .gi_annotation_parser import GIAnnotationParser
 from .gi_wizard import GIWizard
@@ -196,6 +198,11 @@ class GIExtension(BaseExtension):
         return [ExtDependency('c-extension', is_upstream=True)]
 
     def gi_index_handler (self, doc_tree):
+        if not GIExtension.index:
+            warn('parsing-issue',
+                 'Well-known-name gi-index encountered, but "gi_index" is '
+                 'missing')
+            return None
         index_path = find_md_file(GIExtension.gi_index, self.doc_repo.include_paths)
 
         return index_path, 'c', 'gi-extension'
