@@ -110,26 +110,13 @@ Must be used in combination with the C extension.
 
 class GIExtension(BaseExtension):
     EXTENSION_NAME = "gi-extension"
+    gir_files = []
+    index = None
+    languages = None
 
-    def __init__(self, doc_repo, config):
-        BaseExtension.__init__(self, doc_repo, config)
-        self.gir_files = []
+    def __init__(self, doc_repo):
+        BaseExtension.__init__(self, doc_repo)
 
-        gir_file = config.get('gir_file')
-        if gir_file:
-            if not os.path.exists(gir_file):
-                gir_file = doc_repo.resolve_config_path(gir_file)
-            self.gir_files.append(gir_file)
-
-        gir_files = config.get('gir_files', [])
-        for gir_file in gir_files:
-            if gir_file:
-                if not os.path.exists(gir_file):
-                    gir_file = doc_repo.resolve_config_path(gir_file)
-                self.gir_files.append(gir_file)
-
-        self.gi_index = config.get('gi_index')
-        self.languages = [l.lower() for l in config.get('languages', [])]
         self.language = 'c'
 
         doc_repo.doc_tree.page_parser.register_well_known_name ('gobject-api',
@@ -146,7 +133,7 @@ class GIExtension(BaseExtension):
         # know about their children
         self.__class_nodes = {}
 
-        for gir_file in self.gir_files:
+        for gir_file in GIExtension.gir_files:
             gir_root = etree.parse(gir_file).getroot()
             self.__cache_nodes(gir_root)
 
@@ -157,11 +144,6 @@ class GIExtension(BaseExtension):
         self.__c_names = {}
         self.__python_names = {}
         self.__javascript_names = {}
-
-        # Make sure C always gets formatted first
-        if 'c' in self.languages:
-            self.languages.remove ('c')
-            self.languages.insert (0, 'c')
 
         self.__annotation_parser = GIAnnotationParser()
 
@@ -193,16 +175,33 @@ class GIExtension(BaseExtension):
                 finalize_function=HotdocWizard.finalize_path)
 
     @staticmethod
+    def parse_config(doc_repo, config):
+        gir_files = config.get('gir_files', [])
+        gir_files.append(config.get('gir_file'))
+        for gir_file in gir_files:
+            if gir_file:
+                if not os.path.exists(gir_file):
+                    gir_file = doc_repo.resolve_config_path(gir_file)
+                GIExtension.gir_files.append(gir_file)
+        GIExtension.gi_index = config.get('gi_index')
+        GIExtension.languages = [l.lower() for l in config.get(
+            'languages', [])]
+        # Make sure C always gets formatted first
+        if 'c' in GIExtension.languages:
+            GIExtension.languages.remove ('c')
+            GIExtension.languages.insert (0, 'c')
+
+    @staticmethod
     def get_dependencies ():
         return [ExtDependency('c-extension', is_upstream=True)]
 
     def gi_index_handler (self, doc_tree):
-        index_path = find_md_file(self.gi_index, self.doc_repo.include_paths)
+        index_path = find_md_file(GIExtension.gi_index, self.doc_repo.include_paths)
 
         return index_path, 'c', 'gi-extension'
 
     def setup (self):
-        if not self.gir_files:
+        if not GIExtension.gir_files:
             return
 
         self.__gather_gtk_doc_links()
