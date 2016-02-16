@@ -837,9 +837,10 @@ class GIExtension(BaseExtension):
             block = None
             if parent_comment:
                 comment = parent_comment.params.get (vfunc_node.attrib['name'])
-                block = Comment (name=vfunc_node.attrib['name'],
-                                 description=comment.description,
-                                 filename=parent_comment.filename)
+                if comment:
+                    block = Comment (name=vfunc_node.attrib['name'],
+                                     description=comment.description,
+                                     filename=parent_comment.filename)
 
             symbols.append(self.__create_vfunc_symbol (vfunc_node, block,
                                                        klass_name))
