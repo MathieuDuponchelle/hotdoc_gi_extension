@@ -41,8 +41,6 @@ from hotdoc.core.links import Link
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.wizard import HotdocWizard
 
-from hotdoc.utils.loggable import warn
-
 from .gi_html_formatter import GIHtmlFormatter
 from .gi_annotation_parser import GIAnnotationParser
 from .gi_wizard import GIWizard
@@ -199,9 +197,9 @@ class GIExtension(BaseExtension):
 
     def gi_index_handler (self, doc_tree):
         if not GIExtension.index:
-            warn('parsing-issue',
-                 'Well-known-name gi-index encountered, but "gi_index" is '
-                 'missing')
+            self.warn('parsing-issue',
+                      'Well-known-name gi-index encountered, but "gi_index" is '
+                      'missing')
             return None
         index_path = find_md_file(GIExtension.index, self.doc_repo.include_paths)
 
@@ -211,6 +209,7 @@ class GIExtension(BaseExtension):
         if not GIExtension.gir_files:
             return
 
+        self.info('Gathering legacy gtk-doc links')
         self.__gather_gtk_doc_links()
         formatter = self.get_formatter(self.doc_repo.output_format)
         formatter.create_c_fundamentals()
@@ -778,6 +777,7 @@ class GIExtension(BaseExtension):
         return components, gi_name
 
     def __update_function (self, func, node):
+        self.debug('Updating function %s' % func.display_name)
         func.is_method = node.tag.endswith ('method')
 
         self.__add_translations(func.unique_name, node)
@@ -806,6 +806,7 @@ class GIExtension(BaseExtension):
         self.__sort_parameters (func, func.return_value, func_parameters)
 
     def __update_struct (self, symbol, node):
+        self.debug('Updating record %s' % symbol.display_name)
         symbols = []
 
         components, gi_name = self.__add_translations(symbol.unique_name, node)
@@ -821,11 +822,13 @@ class GIExtension(BaseExtension):
                                      namespaces = self.__nsmap):
             symbols.append(self.__create_signal_symbol(
                 sig_node, klass_name))
+            self.debug("Added signal symbol %s" % sig_node.attrib['name'])
 
         for prop_node in node.findall('./core:property',
                                      namespaces = self.__nsmap):
             symbols.append(self.__create_property_symbol(
                 prop_node, klass_name))
+            self.debug("Added property symbol %s" % prop_node.attrib['name'])
 
         class_struct_name = node.attrib.get('{%s}type-struct' %
                 self.__nsmap['glib'])
@@ -850,6 +853,7 @@ class GIExtension(BaseExtension):
 
             symbols.append(self.__create_vfunc_symbol (vfunc_node, block,
                                                        klass_name))
+            self.debug("Added vmethod symbol %s" % vfunc_node.attrib['name'])
 
         is_gtype_struct_for = node.attrib.get('{%s}is-gtype-struct-for' %
                 self.__nsmap['glib'])
