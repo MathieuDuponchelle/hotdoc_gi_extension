@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "hotdoc_gi_extension",
-    version = "0.6.9",
+    version = "0.6.9.1",
     keywords = "gobject-introspection C hotdoc",
     url='https://github.com/hotdoc/hotdoc_gi_extension',
     author_email = 'mathieu.duponchelle@opencreed.com',
