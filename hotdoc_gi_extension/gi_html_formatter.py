@@ -382,6 +382,23 @@ class GIHtmlFormatter(HtmlFormatter):
                                 'constant': constant})
         return (out, False)
 
+    def _format_comment(self, comment, link_resolver):
+        ast = comment.extension_attrs['gi-extension']['ast']
+
+        if not comment.description:
+            out = u''
+        elif ast:
+            out = self._docstring_formatter.ast_to_html(
+                ast, link_resolver)
+        else:
+            ast = self._docstring_formatter.to_ast(
+                comment.description, link_resolver)
+            out = self._docstring_formatter.ast_to_html(
+                ast, link_resolver)
+            comment.extension_attrs['gi-extension']['ast'] = ast
+
+        return out
+
     def _get_assets_path(self):
         return os.path.join('..', 'assets')
 
