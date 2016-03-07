@@ -16,11 +16,16 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
+
 from setuptools import setup, find_packages
+
+with open(os.path.join('hotdoc_gi_extension', 'VERSION.txt'), 'r') as _:
+    VERSION = _.read().strip()
 
 setup(
     name = "hotdoc_gi_extension",
-    version = "0.7",
+    version = VERSION,
     keywords = "gobject-introspection C hotdoc",
     url='https://github.com/hotdoc/hotdoc_gi_extension',
     author_email = 'mathieu.duponchelle@opencreed.com',
@@ -31,6 +36,7 @@ setup(
 
     package_data = {
         '': ['*.html'],
+        'hotdoc_gi_extension': ['VERSION.txt'],
         'hotdoc_gi_extension.transition_scripts': ['translate_sections.sh'],
     },
 
