@@ -1,6 +1,5 @@
 import os
 from hotdoc.formatters.html_formatter import HtmlFormatter
-from hotdoc.core.links import Link
 from hotdoc.core.symbols import *
 import lxml.etree
 
@@ -12,162 +11,6 @@ class GIHtmlFormatter(HtmlFormatter):
         self.__gi_extension = gi_extension
         self.__link_resolver = link_resolver
         HtmlFormatter.__init__(self, searchpath)
-
-        # FIXME : these links do not belong here
-        self.python_fundamentals = self.__create_python_fundamentals()
-        self.javascript_fundamentals = self.__create_javascript_fundamentals()
-        self.c_fundamentals = {}
-
-    def create_c_fundamentals(self):
-        for c_name, link in self.python_fundamentals.iteritems():
-            link.id_ = c_name
-            elink = self.__link_resolver.get_named_link(link.id_)
-            if elink:
-                self.c_fundamentals[c_name] = Link(elink.ref, elink.title, None)
-
-    def __create_javascript_fundamentals(self):
-        string_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/String',
-                        'String', None)
-        boolean_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/Boolean',
-                        'Boolean', None)
-        pointer_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/Object', 'Object',
-                        None)
-        true_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/Boolean',
-                        'true', None)
-        false_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/Boolean',
-                        'false', None)
-        number_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Glossary/Number',
-                        'Number', None)
-        null_link = \
-                Link('https://developer.mozilla.org/en-US/docs/Web/'
-                        'JavaScript/Reference/Global_Objects/null',
-                        'null', None)
-
-        fundamentals = {
-                'gchararray': string_link,
-                'gunichar': string_link,
-                'utf8': string_link,
-                'gchar': number_link,
-                'guchar': number_link,
-                'gint8': number_link,
-                'guint8': number_link,
-                'gint16': number_link,
-                'guint16': number_link,
-                'gint32': number_link,
-                'guint32': number_link,
-                'gint64': number_link,
-                'guint64': number_link,
-                'gshort': number_link,
-                'gint': number_link,
-                'guint': number_link,
-                'glong': number_link,
-                'gulong': number_link,
-                'gsize': number_link,
-                'gssize': number_link,
-                'gintptr': number_link,
-                'guintptr': number_link,
-                'gfloat': number_link,
-                'gdouble': number_link,
-                'gboolean': number_link,
-                'TRUE': true_link,
-                'FALSE': false_link,
-                'gpointer': pointer_link,
-                'NULL': null_link,
-                }
-        return fundamentals
-
-    def __create_python_fundamentals(self):
-        string_link = \
-                Link('https://docs.python.org/2.7/library/functions.html#str',
-                    'str', None)
-        boolean_link = \
-                Link('https://docs.python.org/2.7/library/functions.html#bool',
-                        'bool', None)
-        true_link = \
-                Link('https://docs.python.org/2/library/constants.html#True',
-                    'True', None)
-        false_link = \
-               Link('https://docs.python.org/2/library/constants.html#False',
-                    'False', None)
-        pointer_link = \
-                Link('https://docs.python.org/2.7/library/functions.html#object',
-                    'object', None)
-        integer_link = \
-                Link('https://docs.python.org/2/library/functions.html#int',
-                        'int', None)
-        float_link = \
-                Link('https://docs.python.org/2/library/functions.html#float',
-                        'float', None)
-        none_link = \
-                Link('https://docs.python.org/2/library/constants.html#None',
-                        'None', None)
-        unicode_link = \
-                Link('https://docs.python.org/2/library/functions.html#unicode',
-                        'unicode', None)
-
-        gtype_link = \
-                Link('https://developer.gnome.org/gobject/stable/'
-                        'gobject-Type-Information.html#GType',
-                        'GObject.Type', None)
-
-        gvariant_link = \
-                Link('https://developer.gnome.org/glib/stable/glib-GVariant.html',
-                        'GLib.Variant', None)
-
-        fundamentals = {
-                "none": none_link,
-                "gpointer": pointer_link,
-                "gconstpointer": pointer_link,
-                "gboolean": boolean_link,
-                "gint8": integer_link,
-                "guint8": integer_link,
-                "gint16": integer_link,
-                "guint16": integer_link,
-                "gint32": integer_link,
-                "guint32": integer_link,
-                "gchar": integer_link,
-                "guchar": integer_link,
-                "gshort": integer_link,
-                "gushort": integer_link,
-                "gint": integer_link,
-                "guint": integer_link,
-                "gfloat": float_link,
-                "gdouble": float_link,
-                "utf8": unicode_link,
-                "gunichar": unicode_link,
-                "filename": string_link,
-                "gchararray": string_link,
-                "GType": gtype_link,
-                "GVariant": gvariant_link,
-                "gsize": integer_link,
-                "gssize": integer_link,
-                "goffset": integer_link,
-                "gintptr": integer_link,
-                "guintptr": integer_link,
-                "glong": integer_link,
-                "gulong": integer_link,
-                "gint64": integer_link,
-                "guint64": integer_link,
-                "long double": float_link,
-                "long long": integer_link,
-                "unsigned long long": integer_link,
-                "TRUE": true_link,
-                "FALSE": false_link,
-                "NULL": none_link,
-        }
-
-        return fundamentals
 
     def format_annotations (self, annotations):
         template = self.engine.get_template('gi_annotations.html')
@@ -225,7 +68,8 @@ class GIHtmlFormatter(HtmlFormatter):
         else:
             parameter.extension_contents.pop('type-link', None)
 
-        return HtmlFormatter._format_parameter_symbol (self, parameter)
+        res = HtmlFormatter._format_parameter_symbol (self, parameter)
+        return res
 
     def _format_linked_symbol (self, symbol):
         if self.__gi_extension.language == 'c':
@@ -239,10 +83,13 @@ class GIHtmlFormatter(HtmlFormatter):
         if gi_name is None:
             return HtmlFormatter._format_linked_symbol (self, symbol)
 
-        if gi_name in self.fundamentals:
-            return self._format_type_tokens ([self.fundamentals[gi_name]])
+        fund = self.__gi_extension._fundamentals.get(gi_name)
+        if fund:
+            link = Link(fund.ref, fund._title, gi_name)
+            return self._format_type_tokens ([link])
 
-        return self._format_type_tokens (symbol.type_tokens)
+        res = self._format_type_tokens (symbol.type_tokens)
+        return res
 
     def _format_prototype (self, function, is_pointer, title):
         if self.__gi_extension.language == 'c':
@@ -254,10 +101,6 @@ class GIHtmlFormatter(HtmlFormatter):
         if params is None:
             return HtmlFormatter._format_prototype (self, function,
                     is_pointer, title)
-
-        for param in params:
-            #param.resolve_links(self.__link_resolver)
-            param.formatted_link = self._format_linked_symbol(param)
 
         c_name = function._make_name()
 
@@ -402,24 +245,9 @@ class GIHtmlFormatter(HtmlFormatter):
     def _get_assets_path(self):
         return os.path.join('..', 'assets')
 
-    def set_fundamentals(self, language):
-        if language == 'python':
-            self.fundamentals = self.python_fundamentals
-        elif language == 'javascript':
-            self.fundamentals = self.javascript_fundamentals
-        elif language == 'c':
-            self.fundamentals = self.c_fundamentals
-        else:
-            self.fundamentals = {}
-
-        for c_name, link in self.fundamentals.iteritems():
-            link.id_ = c_name
-            self.__link_resolver.upsert_link(link, overwrite_ref=True)
-
     def patch_page(self, page, symbol, output):
         symbol.update_children_comments()
         for l in self.__gi_extension.languages:
-            self.set_fundamentals(l)
             self.__gi_extension.setup_language (l)
             self.format_symbol(symbol, self.__link_resolver)
 
@@ -437,4 +265,3 @@ class GIHtmlFormatter(HtmlFormatter):
                 tree.write_c14n(f)
 
         self.__gi_extension.setup_language(None)
-        self.set_fundamentals('c')

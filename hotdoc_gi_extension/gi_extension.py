@@ -37,12 +37,13 @@ from hotdoc.core.comment_block import Comment, comment_from_tag
 from hotdoc.core.base_extension import BaseExtension, ExtDependency
 from hotdoc.core.base_formatter import Formatter
 from hotdoc.core.file_includer import find_md_file
-from hotdoc.core.links import Link
+from hotdoc.core.links import Link, LinkResolver
 from hotdoc.core.doc_tree import Page
 from hotdoc.core.wizard import HotdocWizard
 
 from .gi_html_formatter import GIHtmlFormatter
 from .gi_annotation_parser import GIAnnotationParser
+from .fundamentals import PY_FUNDAMENTALS, JS_FUNDAMENTALS
 from .gi_wizard import GIWizard
 
 
@@ -151,6 +152,9 @@ class GIExtension(BaseExtension):
                 self.doc_repo.link_resolver)
 
         self.__translated_names = {}
+        self.__gtkdoc_hrefs = {}
+
+        self._fundamentals = {}
 
     @staticmethod
     def add_arguments (parser):
@@ -211,16 +215,13 @@ class GIExtension(BaseExtension):
 
         self.info('Gathering legacy gtk-doc links')
         self.__gather_gtk_doc_links()
-        formatter = self.get_formatter(self.doc_repo.output_format)
-        formatter.create_c_fundamentals()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
 
     def format_page(self, page, link_resolver, base_output):
+        LinkResolver.get_link_signal.connect(self.__search_legacy_links)
         Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
         formatter = self.get_formatter('html')
         for l in self.languages:
-            formatter.set_fundamentals(l)
-
             self.setup_language (l)
             output = os.path.join (base_output, l)
             if not os.path.exists (output):
@@ -228,7 +229,8 @@ class GIExtension(BaseExtension):
             BaseExtension.format_page (self, page, link_resolver, output)
 
         self.setup_language(None)
-        formatter.set_fundamentals('c')
+
+        LinkResolver.get_link_signal.disconnect(self.__search_legacy_links)
         Formatter.formatting_symbol_signal.disconnect(self.__formatting_symbol)
 
     def __find_gir_file(self, gir_name):
@@ -354,7 +356,6 @@ class GIExtension(BaseExtension):
                     pass
 
     def __parse_sgml_index(self, dir_):
-        symbol_map = dict({})
         remote_prefix = ""
         with open(os.path.join(dir_, "index.sgml"), 'r') as f:
             for l in f:
@@ -374,9 +375,7 @@ class GIExtension(BaseExtension):
                     else:
                         href = filename
 
-                    link = Link (href, title, title)
-
-                    self.doc_repo.link_resolver.upsert_link (link, external=True)
+                    self.__gtkdoc_hrefs[title] = href
 
     def __add_annotations (self, formatter, symbol):
         if self.language == 'c':
@@ -389,7 +388,7 @@ class GIExtension(BaseExtension):
             symbol.extension_contents.pop('Annotations', None)
 
     def __is_introspectable(self, name):
-        if name in self.get_formatter('html').fundamentals:
+        if name in self._fundamentals:
             return True
 
         node = self.__node_cache.get(name)
@@ -419,22 +418,44 @@ class GIExtension(BaseExtension):
         return True
 
     def __translate_link_ref(self, link):
-        if link.ref is None:
-            return None
+        fund = self._fundamentals.get(link.id_)
+        if fund:
+            return fund.ref
 
-        if link.ref.startswith('http'):
-            return None
+        if self.language == 'c':
+            return self.__gtkdoc_hrefs.get(link.id_)
 
-        if self.language != 'c' and not self.__is_introspectable(link.id_):
+        if link.ref and self.language != 'c' and not self.__is_introspectable(link.id_):
             return '../c/' + link.ref
+
+        # Do a last effort
+        if link.ref == None:
+            return self.__gtkdoc_hrefs.get(link.id_)
 
         return None
 
+    def __search_legacy_links(self, resolver, name):
+        href = self.__gtkdoc_hrefs.get(name)
+        if href:
+            return Link(href, name, name)
+        return None
+
     def __translate_link_title(self, link):
+        fund = self._fundamentals.get(link.id_)
+        if fund:
+            return fund._title
+
         if self.language != 'c' and not self.__is_introspectable(link.id_):
             return link._title + ' (not introspectable)'
 
-        return self.__translated_names.get(link.id_)
+        translated = self.__translated_names.get(link.id_)
+        if translated:
+            return translated
+
+        if self.language == 'c' and link.id_ in self.__gtkdoc_hrefs:
+            return link.id_
+
+        return None
 
     def setup_language (self, language):
         self.language = language
@@ -462,12 +483,16 @@ class GIExtension(BaseExtension):
                     self.__rename_page_link)
 
         if language == 'c':
+            self._fundamentals = {}
             self.__translated_names = self.__c_names
         elif language == 'python':
+            self._fundamentals = PY_FUNDAMENTALS
             self.__translated_names = self.__python_names
         elif language == 'javascript':
+            self._fundamentals = JS_FUNDAMENTALS
             self.__translated_names = self.__javascript_names
         else:
+            self._fundamentals = {}
             self.__translated_names = {}
 
     def __unnest_type (self, parameter):
@@ -587,7 +612,9 @@ class GIExtension(BaseExtension):
         if gi_name == 'none':
             ret_item = None
         else:
-            ret_item = ReturnItemSymbol (type_tokens=type_tokens, comment=return_comment)
+            ret_item = ReturnItemSymbol (type_tokens=type_tokens,
+                    comment=return_comment)
+            ret_item.add_extension_attribute('gi-extension', 'gi_name', gi_name)
 
         res = [ret_item]
 
@@ -880,7 +907,7 @@ class GIExtension(BaseExtension):
         if node is None:
             return res
 
-        if isinstance(symbol, FunctionSymbol):
+        if type(symbol) in (FunctionSymbol, CallbackSymbol):
             self.__update_function(symbol, node)
 
         elif type (symbol) == StructSymbol:
