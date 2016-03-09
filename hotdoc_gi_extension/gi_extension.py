@@ -174,6 +174,11 @@ class GIExtension(BaseExtension):
 
         self._fundamentals = {}
 
+        if GIExtension.gir_files:
+            from hotdoc_c_extension.c_extension import ClangScanner
+            c_extension = doc_repo.extensions.get('c-extension')
+            c_extension.scanner.set_extension(self)
+
     @staticmethod
     def add_arguments (parser):
         group = parser.add_argument_group('GObject-introspection extension',
@@ -219,10 +224,14 @@ class GIExtension(BaseExtension):
 
     def gi_index_handler (self, doc_tree):
         if not GIExtension.index:
-            self.warn('parsing-issue',
-                      'Well-known-name gi-index encountered, but "gi_index" is '
-                      'missing')
-            return None
+            from hotdoc_c_extension.c_extension import CExtension
+
+            headers = [s for s in CExtension.sources if s.endswith('.h')]
+            self.debug("Creating naive index for %d header files" % (
+                len(headers)))
+            ipath, _, __ = self.create_naive_index(headers)
+            return ipath, 'c', 'gi-extension'
+
         index_path = find_md_file(GIExtension.index, self.doc_repo.include_paths)
 
         return index_path, 'c', 'gi-extension'
@@ -234,6 +243,9 @@ class GIExtension(BaseExtension):
         self.info('Gathering legacy gtk-doc links')
         self.__gather_gtk_doc_links()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
+
+        if not GIExtension.index:
+            self.update_naive_index()
 
     def format_page(self, page, link_resolver, base_output):
         LinkResolver.get_link_signal.connect(self.__search_legacy_links)
