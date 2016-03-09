@@ -147,10 +147,17 @@ class GIExtension(BaseExtension):
 
         self.__parsed_girs = set()
         self.__node_cache = {}
+
+        # If generating the index ourselves, we will filter these functions
+        # out.
+        self.__get_type_functions = set({})
         # We need to collect all class nodes and build the
         # hierarchy beforehand, because git class nodes do not
         # know about their children
         self.__class_nodes = {}
+
+        # Only used to reduce debug verbosity
+        self.__dropped_symbols = set({})
 
         for gir_file in GIExtension.gir_files:
             gir_root = etree.parse(gir_file).getroot()
@@ -290,6 +297,9 @@ class GIExtension(BaseExtension):
             if node.tag == class_tag:
                 gi_name = '.'.join(self.__get_gi_name_components(node))
                 self.__class_nodes[gi_name] = node
+                get_type_function = node.attrib.get('{%s}get-type' %
+                    self.__nsmap['glib'])
+                self.__get_type_functions.add(get_type_function)
                 self.__node_cache['%s::%s' % (name, name)] = node
 
         for node in gir_root.xpath(
@@ -524,6 +534,34 @@ class GIExtension(BaseExtension):
         else:
             self._fundamentals = {}
             self.__translated_names = {}
+
+    # We implement filtering of some symbols
+    def get_or_create_symbol(self, *args, **kwargs):
+        name = kwargs['display_name']
+
+        # Simply reducing debug verbosity
+        if name in self.__dropped_symbols:
+            return None
+
+        type_ = args[0]
+        comment = kwargs.get('comment')
+
+        # Macros need to be documented to not be filtered
+        # This allows filtering GObject boilerplate
+        if type_ in (FunctionMacroSymbol, ConstantSymbol) and comment is None:
+            self.debug('Dropping macro %s' % name)
+            self.debug('Document it if you want it to be included')
+            self.__dropped_symbols.add(name)
+            return None
+
+        # Drop get_type functions
+        if name in self.__get_type_functions and comment is None:
+            self.debug('Dropping get_type function %s' % name)
+            self.debug('Document it if you want it to be included')
+            self.__dropped_symbols.add(name)
+            return None
+
+        return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
     def __unnest_type (self, parameter):
         array_nesting = 0
