@@ -130,6 +130,7 @@ Must be used in combination with the C extension.
 class GIExtension(BaseExtension):
     EXTENSION_NAME = "gi-extension"
     gir_files = []
+    smart_index = False
     index = None
     languages = None
 
@@ -181,10 +182,14 @@ class GIExtension(BaseExtension):
 
         self._fundamentals = {}
 
+        self.__gen_index_path = None
+
         if GIExtension.gir_files:
             from hotdoc_c_extension.c_extension import ClangScanner
             c_extension = doc_repo.extensions.get('c-extension')
             c_extension.scanner.set_extension(self)
+
+        self.__maybe_generate_index()
 
     @staticmethod
     def add_arguments (parser):
@@ -207,6 +212,8 @@ class GIExtension(BaseExtension):
                     "and follow the prompts later on to have "
                     "one created for you"),
                 finalize_function=HotdocWizard.finalize_path)
+        group.add_argument ("--gi-smart-index", action="store_true",
+                dest="gi_smart_index", help="Smart symbols list generation")
 
     @staticmethod
     def parse_config(doc_repo, config):
@@ -225,19 +232,23 @@ class GIExtension(BaseExtension):
             GIExtension.languages.remove ('c')
             GIExtension.languages.insert (0, 'c')
 
+        GIExtension.smart_index = config.get('gi_smart_index')
+
     @staticmethod
     def get_dependencies ():
         return [ExtDependency('c-extension', is_upstream=True)]
 
-    def gi_index_handler (self, doc_tree):
-        if not GIExtension.index:
-            from hotdoc_c_extension.c_extension import CExtension
+    def _get_user_index_path(self):
+        return GIExtension.index
 
-            headers = [s for s in CExtension.sources if s.endswith('.h')]
-            self.debug("Creating naive index for %d header files" % (
-                len(headers)))
-            ipath, _, __ = self.create_naive_index(headers)
-            return ipath, 'c', 'gi-extension'
+    def _get_all_sources(self):
+        from hotdoc_c_extension.c_extension import CExtension
+        headers = [s for s in CExtension.sources if s.endswith('.h')]
+        return headers
+
+    def gi_index_handler (self, doc_tree):
+        if self.__gen_index_path is not None:
+            return self.__gen_index_path, 'c', 'gi-extension'
 
         index_path = find_md_file(GIExtension.index, self.doc_repo.include_paths)
 
@@ -251,8 +262,8 @@ class GIExtension(BaseExtension):
         self.__gather_gtk_doc_links()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
 
-        if not GIExtension.index:
-            self.update_naive_index()
+        if not GIExtension.index or GIExtension.smart_index:
+            self.update_naive_index(GIExtension.smart_index)
 
     def format_page(self, page, link_resolver, base_output):
         LinkResolver.get_link_signal.connect(self.__search_legacy_links)
@@ -269,6 +280,16 @@ class GIExtension(BaseExtension):
 
         LinkResolver.get_link_signal.disconnect(self.__search_legacy_links)
         Formatter.formatting_symbol_signal.disconnect(self.__formatting_symbol)
+
+    def __maybe_generate_index(self):
+        if not GIExtension.gir_files:
+            return
+
+        if not GIExtension.index or GIExtension.smart_index:
+            headers = self._get_all_sources()
+            self.debug("Creating naive index for %d header files" % (
+                len(headers)))
+            self.__gen_index_path, _, __ = self.create_naive_index(headers)
 
     def __find_gir_file(self, gir_name):
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
