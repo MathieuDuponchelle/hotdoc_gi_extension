@@ -44,6 +44,9 @@ class GIHtmlFormatter(HtmlFormatter):
         if self.__gi_extension.language in ["python", "javascript"]:
             is_pointer = False
             return_value = None
+        elif self.__gi_extension.language in ['c']:
+            if not return_value:
+                return_value = 'void'
 
         return HtmlFormatter._format_callable_summary (self, callable_, return_value,
                 function_name, is_callable, is_pointer)
@@ -91,7 +94,10 @@ class GIHtmlFormatter(HtmlFormatter):
 
     def _format_linked_symbol (self, symbol):
         if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_linked_symbol (self, symbol)
+            res = HtmlFormatter._format_linked_symbol (self, symbol)
+            if symbol == None:
+                res = 'void'
+            return res
 
         if not isinstance (symbol, QualifiedSymbol):
             return HtmlFormatter._format_linked_symbol (self, symbol)
