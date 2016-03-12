@@ -475,13 +475,9 @@ class GIExtension(BaseExtension):
         if fund:
             return fund.ref
 
-        if self.language == 'c':
-            return self.__gtkdoc_hrefs.get(link.id_)
-
         if link.ref and self.language != 'c' and not self.__is_introspectable(link.id_):
             return '../c/' + link.ref
 
-        # Do a last effort
         if link.ref == None:
             return self.__gtkdoc_hrefs.get(link.id_)
 
