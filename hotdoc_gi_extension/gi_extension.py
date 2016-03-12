@@ -570,6 +570,17 @@ class GIExtension(BaseExtension):
             self.__dropped_symbols.add(name)
             return None
 
+        # Drop class structures if not documented as well
+        if type_ == StructSymbol:
+            node = self.__node_cache.get(name)
+            if node is not None:
+                is_gtype_struct_for = node.attrib.get('{%s}is-gtype-struct-for' %
+                    self.__nsmap['glib'])
+                if is_gtype_struct_for and not comment:
+                    self.debug('Dropping class structure %s' % name)
+                    self.debug('Document it if you want it to be included')
+                    return None
+
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
     def __unnest_type (self, parameter):
