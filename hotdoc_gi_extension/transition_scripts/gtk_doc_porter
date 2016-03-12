@@ -224,7 +224,6 @@ def dump_gi_index(standalones, md_paths):
             href = title
             md_path = urllib.unquote(get_free_md_path(md_paths, href))
             sub_md_content = db_to_md (db_content)
-            print "Writing %s " % md_path, "there"
             with open(md_path, 'w') as f:
                 f.write(sub_md_content)
             md_content += '### [%s](%s)\n\n' % (
@@ -297,7 +296,6 @@ def translate_docbook(filename, resolver, md_paths, new_name):
         parent.remove(node)
 
     if metadict:
-        print "Writing", new_name + '.yaml'
         with open (os.path.join (MD_OUTPUT_PATH, new_name + ".yaml"), 'w') as f:
             f.write(yaml.dump(metadict, default_flow_style=False))
 
@@ -324,7 +322,6 @@ def translate_docbook(filename, resolver, md_paths, new_name):
         dump_gi_index(list(standalones), md_paths)
 
     md_content += db_to_md (etree.tostring(root))
-    print "Writing", md_paths[new_name]
     with open (md_paths[new_name], 'w') as f:
         f.write (md_content)
 
@@ -354,7 +351,6 @@ def write_symbols(section, name, symbols):
     if not os.path.exists(opath):
         title = section.find('./TITLE')
 
-    print "writing", opath
     with open(opath, 'w+') as f:
         if title is not None:
             f.write("### %s\n\n" % title.text)
