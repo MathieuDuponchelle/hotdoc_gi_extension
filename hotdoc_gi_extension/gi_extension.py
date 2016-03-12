@@ -131,7 +131,6 @@ class GIExtension(BaseExtension):
     EXTENSION_NAME = "gi-extension"
     gir_files = []
     smart_index = False
-    index = None
     languages = None
 
     def __init__(self, doc_repo):
@@ -195,6 +194,7 @@ class GIExtension(BaseExtension):
     def add_arguments (parser):
         group = parser.add_argument_group('GObject-introspection extension',
                 DESCRIPTION, wizard_class=GIWizard)
+        GIExtension.add_index_argument(group, 'gi', True)
         group.add_argument ("--gir-file", action="store",
                 dest="gir_file",
                 help="Deprecated, use --gir-files instead",
@@ -206,14 +206,6 @@ class GIExtension(BaseExtension):
         group.add_argument ("--languages", action="store",
                 nargs='*',
                 help="Languages to translate documentation in (c, python, javascript)")
-        group.add_argument ("--gi-index", action="store",
-                dest="gi_index",
-                help=("Name of the gi root markdown file, you can answer None "
-                    "and follow the prompts later on to have "
-                    "one created for you"),
-                finalize_function=HotdocWizard.finalize_path)
-        group.add_argument ("--gi-smart-index", action="store_true",
-                dest="gi_smart_index", help="Smart symbols list generation")
 
     @staticmethod
     def parse_config(doc_repo, config):
