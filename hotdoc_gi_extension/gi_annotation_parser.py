@@ -64,6 +64,9 @@ SCOPE_NOTIFIED_HELP=\
 NULLABLE_HELP = \
 "NULL may be passed to the value"
 
+NOT_NULLABLE_HELP = \
+"NULL is *not* OK, either for passing or returning"
+
 DEFAULT_HELP = \
 "Default parameter value (for in case the shadows-to function has less parameters)"
 
@@ -171,6 +174,9 @@ class GIAnnotationParser(object):
     def __make_default_annotation (self, annotation, value):
         return GIAnnotation ("default %s" % str (value[0]), DEFAULT_HELP)
 
+    def __make_not_nullable_annotation(self):
+        return GIAnnotation("not nullable", NOT_NULLABLE_HELP)
+
     def __create_annotation (self, annotation_name, annotation_value):
         factory = self.__annotation_factories.get(annotation_name)
         if not factory:
@@ -191,7 +197,12 @@ class GIAnnotationParser(object):
                 continue
             annotation = self.__create_annotation (ann, val.argument)
             if not annotation:
-                print "This parameter annotation is unknown :[" + ann + "]", val.argument
+                # Special case for silly specification
+                if (ann == 'not' and len(val.argument) == 1 and
+                        val.argument[0] == 'nullable'):
+                    annotations.append(self.__make_not_nullable_annotation())
+                else:
+                    print "This parameter annotation is unknown :[" + ann + "]", val.argument
                 continue
             annotations.append (annotation)
 
