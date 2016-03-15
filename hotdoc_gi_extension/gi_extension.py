@@ -544,8 +544,7 @@ class GIExtension(BaseExtension):
             self._fundamentals = {}
             self.__translated_names = {}
 
-    # We implement filtering of some symbols
-    def get_or_create_symbol(self, *args, **kwargs):
+    def __smart_filter(self, *args, **kwargs):
         name = kwargs['display_name']
 
         # Simply reducing debug verbosity
@@ -581,6 +580,12 @@ class GIExtension(BaseExtension):
                     self.debug('Document it if you want it to be included')
                     return None
 
+        return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
+
+    # We implement filtering of some symbols
+    def get_or_create_symbol(self, *args, **kwargs):
+        if not GIExtension.index or GIExtension.smart_index:
+            return self.__smart_filter(*args, **kwargs)
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
     def __unnest_type (self, parameter):
