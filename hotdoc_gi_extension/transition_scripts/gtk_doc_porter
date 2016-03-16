@@ -375,15 +375,20 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
 class Section(object):
     def __init__(self, node):
         self.node = node
-        self.ofile = unicode(node.find('FILE').text)
-        tnode = node.find('TITLE')
-        if tnode is not None:
-            self.title = tnode.text
-        else:
-            self.title = None
-        symbols = node.getchildren()[-1].tail.split("\n")
-        self.symbols = set([s for s in symbols if s])
         self.comment = None
+        self.ofile = None
+        self.title = None
+        self.symbols = set()
+        if node:
+            self.ofile = unicode(node.find('FILE').text)
+            tnode = node.find('TITLE')
+            if tnode is not None:
+                self.title = tnode.text
+            else:
+                self.title = None
+            symbols = node.getchildren()[-1].tail.split("\n")
+            self.symbols = set([s for s in symbols if s])
+
 
 def parse_section_file(sections_path, section_comments):
     here = os.path.dirname(__file__)
@@ -466,7 +471,6 @@ def dump_smart_index(monitor, sections):
     """
 
     for sname, s in sections.items():
-        print "Writing section", sname
         write_symbols(s, sname, s.symbols)
 
 def patch_comments(patcher, comments):
@@ -483,6 +487,31 @@ def patch_comments(patcher, comments):
                     removed = comment.endlineno - comment.lineno
                     other_comment.lineno -= removed
                     other_comment.endlineno -= removed
+
+def sections_from_naive_pages(monitor):
+    sections = {}
+    for nname, npage in monitor.doc_repo.doc_tree.pages.items():
+        if not \
+            npage.source_file.startswith(monitor.doc_repo.get_generated_doc_folder()):
+            continue
+        section = Section(None)
+        relpath = os.path.relpath(nname,
+            monitor.doc_repo.get_generated_doc_folder())
+        if relpath == 'gen-gi-extension-index.markdown':
+            continue
+        dname = os.path.dirname(relpath)
+        fname = os.path.basename(relpath)[4:]
+        stripped = os.path.splitext(fname)[0]
+        section.ofile = os.path.join(dname, fname)
+        section.comment = monitor.section_comments.get(stripped)
+        if section.comment:
+            section.title = section.comment.title
+        if not section.title:
+            section.title = stripped
+        sections[stripped] = section
+
+    return sections
+
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -521,7 +550,26 @@ if __name__=='__main__':
         monitor.sort_section_comments(sections)
         translate_sections(monitor, sections)
     else:
-        dump_smart_index(monitor, sections)
+        sections = sections_from_naive_pages(monitor)
+        monitor.sort_section_comments(sections)
+        for sname, section in sections.items():
+            section_comment = monitor.section_comments.get(sname)
+            if section_comment:
+                full_path = os.path.join(MD_OUTPUT_PATH, section.ofile)
+                dname = os.path.dirname(full_path)
+                if not os.path.exists(dname):
+                    os.makedirs(dname)
+                    with io.open(full_path, 'w', encoding='utf-8') as f:
+                        if section_comment.title:
+                            f.write(u"### %s\n\n" % cgi.escape(section_comment.title))
+                        elif section.title:
+                            f.write(u"### %s\n\n" % cgi.escape(section.title))
+                        if section_comment.short_description:
+                            f.write(u'%s\n\n' %
+                                translate(section_comment.short_description))
+                        if section_comment.description:
+                            f.write(u'%s\n\n' % translate(section_comment.description))
+
 
     smart_links = {}
 
@@ -530,10 +578,6 @@ if __name__=='__main__':
     md_paths['index'] = os.path.join(MD_OUTPUT_PATH, 'index.markdown')
     translate_docbook(args.docbook_index, smart_links, resolver, md_paths, 'index')
 
-    #translate_sections(sections)
-
     patcher = Patcher()
     patch_comments(patcher, monitor.class_comments.values() +
         monitor.section_comments.values())
-
-    sys.exit(0)
