@@ -41,6 +41,7 @@ from hotdoc.core.symbols import *
 from hotdoc.core.doc_repo import DocRepo
 from hotdoc.core.exceptions import HotdocException
 from hotdoc.core.doc_database import DocDatabase
+from hotdoc.parsers.gtk_doc_parser import GtkDocStringFormatter
 from hotdoc_gi_extension.gi_extension import GIExtension
 from hotdoc.utils.loggable import warn, info, debug, Logger
 
@@ -135,6 +136,7 @@ require_program('git')
 class DocRepoMonitor(object):
     def __init__(self):
         self.section_comments = {}
+        self.class_comments = {}
 
     def build(self, args):
         DocDatabase.comment_added_signal.connect(self.__comment_added)
@@ -153,6 +155,33 @@ class DocRepoMonitor(object):
             bname = bname[4:]
             stripped = os.path.splitext(bname)[0]
             self.naive_pages[stripped] = page
+
+    def sort_section_comments(self, sections):
+        actual_section_comments = {}
+        for name, section in sections.items():
+            section_comment = self.section_comments.get(name)
+            if section_comment is None:
+                continue
+
+            sym = self.doc_repo.doc_database.get_symbol(section.title or name)
+            if sym and type(sym) is StructSymbol:
+                class_name = '%s::%s' % (sym.unique_name, sym.unique_name)
+                class_sym = self.doc_repo.doc_database.get_symbol(class_name)
+                if class_sym:
+                    new_name = class_name + ':'
+                    section_comment.raw_comment = \
+                        section_comment.raw_comment.replace(section_comment.name,
+                            new_name)
+                    self.class_comments[new_name] = section_comment
+                    section.comment = None
+                else:
+                    actual_section_comments[name] = section_comment
+                    section_comment.raw_comment = ''
+            else:
+                actual_section_comments[name] = section_comment
+                section_comment.raw_comment = ''
+
+        self.section_comments = actual_section_comments
 
     def __comment_added(self, doc_db, comment):
         if comment.name.startswith('SECTION'):
@@ -371,6 +400,11 @@ def parse_section_file(sections_path, section_comments):
     os.unlink('hotdoc-tmp-sections.txt')
     return sections
 
+def translate(docstring):
+    formatter = GtkDocStringFormatter()
+    docstring = cgi.escape(docstring)
+    return formatter.translate(docstring, None, 'markdown')
+
 def write_symbols(monitor, section):
     not_found = 0
     found = 0
@@ -384,9 +418,9 @@ def write_symbols(monitor, section):
                 f.write(u"### %s\n\n" % cgi.escape(section.title))
             if section.comment.short_description:
                 f.write(u'%s\n\n' %
-                    cgi.escape(section.comment.short_description))
+                    translate(section.comment.short_description))
             if section.comment.description:
-                f.write(u'%s\n\n' % cgi.escape(section.comment.description))
+                f.write(u'%s\n\n' % translate(section.comment.description))
         for symbol in section.symbols:
             sym = monitor.doc_repo.doc_database.get_symbol(symbol)
             if sym is None:
@@ -411,7 +445,7 @@ def translate_sections(monitor, sections):
         warn('section-symbol-not-found',
             "%d symbols out of %d could not be found, please verify that "
             "the list of input sources is complete. "
-            "Note that some symbols might be macros hidden "
+            "Note that some symbols might be hidden "
             "by the preprocessor. "
             "Rerun this tool with HOTDOC_DEBUG=2 to see the full list "
             "of missing symbols." % (not_found, n_symbols))
@@ -434,6 +468,21 @@ def dump_smart_index(monitor, sections):
     for sname, s in sections.items():
         print "Writing section", sname
         write_symbols(s, sname, s.symbols)
+
+def patch_comments(patcher, comments):
+    if not comments:
+        return
+
+    for comment in comments:
+        patcher.patch(comment.filename, comment.lineno - 1,
+                comment.endlineno, comment.raw_comment)
+        if comment.raw_comment == '':
+            for other_comment in comments:
+                if (other_comment.filename == comment.filename and
+                        other_comment.lineno > comment.endlineno):
+                    removed = comment.endlineno - comment.lineno
+                    other_comment.lineno -= removed
+                    other_comment.endlineno -= removed
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -467,7 +516,9 @@ if __name__=='__main__':
 
     if args.section_file is not None:
         require_path(args.section_file)
-        sections = parse_section_file(args.section_file, monitor.section_comments)
+        sections = parse_section_file(args.section_file,
+            monitor.section_comments)
+        monitor.sort_section_comments(sections)
         translate_sections(monitor, sections)
     else:
         dump_smart_index(monitor, sections)
@@ -481,5 +532,8 @@ if __name__=='__main__':
 
     #translate_sections(sections)
 
+    patcher = Patcher()
+    patch_comments(patcher, monitor.class_comments.values() +
+        monitor.section_comments.values())
 
     sys.exit(0)

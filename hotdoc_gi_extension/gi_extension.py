@@ -584,7 +584,7 @@ class GIExtension(BaseExtension):
 
     # We implement filtering of some symbols
     def get_or_create_symbol(self, *args, **kwargs):
-        if not GIExtension.index or GIExtension.smart_index:
+        if GIExtension.smart_index:
             return self.__smart_filter(*args, **kwargs)
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
