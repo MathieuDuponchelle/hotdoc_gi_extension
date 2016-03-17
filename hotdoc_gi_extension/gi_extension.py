@@ -57,12 +57,10 @@ from hotdoc.core.base_formatter import Formatter
 from hotdoc.core.file_includer import find_md_file
 from hotdoc.core.links import Link, LinkResolver
 from hotdoc.core.doc_tree import Page
-from hotdoc.core.wizard import HotdocWizard
 
 from .gi_html_formatter import GIHtmlFormatter
 from .gi_annotation_parser import GIAnnotationParser
 from .fundamentals import PY_FUNDAMENTALS, JS_FUNDAMENTALS
-from .gi_wizard import GIWizard
 
 
 class Flag (object):
@@ -193,8 +191,8 @@ class GIExtension(BaseExtension):
     @staticmethod
     def add_arguments (parser):
         group = parser.add_argument_group('GObject-introspection extension',
-                DESCRIPTION, wizard_class=GIWizard)
-        GIExtension.add_index_argument(group, 'gi', True)
+                DESCRIPTION)
+        GIExtension.add_index_argument(group)
         GIExtension.add_sources_argument(group, allow_filters=False)
         group.add_argument ("--languages", action="store",
                 nargs='*',
@@ -209,8 +207,6 @@ class GIExtension(BaseExtension):
         if 'c' in GIExtension.languages:
             GIExtension.languages.remove ('c')
             GIExtension.languages.insert (0, 'c')
-
-        GIExtension.smart_index = config.get('gi_smart_index')
 
     @staticmethod
     def get_dependencies ():
