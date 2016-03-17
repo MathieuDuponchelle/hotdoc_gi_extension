@@ -129,7 +129,7 @@ Must be used in combination with the C extension.
 
 class GIExtension(BaseExtension):
     EXTENSION_NAME = "gi-extension"
-    gir_files = []
+    argument_prefix = "gi"
     smart_index = False
     languages = None
 
@@ -159,7 +159,7 @@ class GIExtension(BaseExtension):
         # Only used to reduce debug verbosity
         self.__dropped_symbols = set({})
 
-        for gir_file in GIExtension.gir_files:
+        for gir_file in GIExtension.sources:
             gir_root = etree.parse(gir_file).getroot()
             self.__cache_nodes(gir_root)
 
@@ -183,7 +183,7 @@ class GIExtension(BaseExtension):
 
         self.__gen_index_path = None
 
-        if GIExtension.gir_files:
+        if GIExtension.sources:
             from hotdoc_c_extension.c_extension import ClangScanner
             c_extension = doc_repo.extensions.get('c-extension')
             c_extension.scanner.set_extension(self)
@@ -195,28 +195,14 @@ class GIExtension(BaseExtension):
         group = parser.add_argument_group('GObject-introspection extension',
                 DESCRIPTION, wizard_class=GIWizard)
         GIExtension.add_index_argument(group, 'gi', True)
-        group.add_argument ("--gir-file", action="store",
-                dest="gir_file",
-                help="Deprecated, use --gir-files instead",
-                finalize_function=HotdocWizard.finalize_path)
-        group.add_argument ("--gir-files", action="store", nargs="+",
-                dest="gir_files", help="Gir files to parse",
-                no_prompt=True,
-                finalize_function=HotdocWizard.finalize_paths)
+        GIExtension.add_sources_argument(group, allow_filters=False)
         group.add_argument ("--languages", action="store",
                 nargs='*',
                 help="Languages to translate documentation in (c, python, javascript)")
 
     @staticmethod
     def parse_config(doc_repo, config):
-        gir_files = config.get('gir_files', [])
-        gir_files.append(config.get('gir_file'))
-        for gir_file in gir_files:
-            if gir_file:
-                if not os.path.exists(gir_file):
-                    gir_file = doc_repo.resolve_config_path(gir_file)
-                GIExtension.gir_files.append(gir_file)
-        GIExtension.index = config.get('gi_index')
+        GIExtension.parse_standard_config(config)
         GIExtension.languages = [l.lower() for l in config.get(
             'languages', [])]
         # Make sure C always gets formatted first
@@ -247,7 +233,7 @@ class GIExtension(BaseExtension):
         return index_path, 'c', 'gi-extension'
 
     def setup (self):
-        if not GIExtension.gir_files:
+        if not GIExtension.sources:
             return
 
         self.info('Gathering legacy gtk-doc links')
@@ -274,7 +260,7 @@ class GIExtension(BaseExtension):
         Formatter.formatting_symbol_signal.disconnect(self.__formatting_symbol)
 
     def __maybe_generate_index(self):
-        if not GIExtension.gir_files:
+        if not GIExtension.sources:
             return
 
         if not GIExtension.index or GIExtension.smart_index:
