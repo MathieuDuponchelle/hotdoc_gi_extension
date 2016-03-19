@@ -212,6 +212,9 @@ class GIExtension(BaseExtension):
     def get_dependencies ():
         return [ExtDependency('c-extension', is_upstream=True)]
 
+    def _get_languages(self):
+        return [self.language]
+
     def _get_user_index_path(self):
         return GIExtension.index
 
@@ -239,15 +242,12 @@ class GIExtension(BaseExtension):
         if not GIExtension.index or GIExtension.smart_index:
             self.update_naive_index(GIExtension.smart_index)
 
-    def format_page(self, page, link_resolver, base_output):
+    def format_page(self, page, link_resolver, output):
         LinkResolver.get_link_signal.connect(self.__search_legacy_links)
         Formatter.formatting_symbol_signal.connect(self.__formatting_symbol)
         formatter = self.get_formatter('html')
         for l in self.languages:
             self.setup_language (l)
-            output = os.path.join (base_output, l)
-            if not os.path.exists (output):
-                os.mkdir (output)
             BaseExtension.format_page (self, page, link_resolver, output)
 
         self.setup_language(None)
@@ -439,6 +439,8 @@ class GIExtension(BaseExtension):
         return True
 
     def __formatting_symbol(self, formatter, symbol):
+        symbol.language = self.language
+
         if type(symbol) in [ReturnItemSymbol, ParameterSymbol]:
             self.__add_annotations (formatter, symbol)
 
@@ -566,6 +568,7 @@ class GIExtension(BaseExtension):
 
     # We implement filtering of some symbols
     def get_or_create_symbol(self, *args, **kwargs):
+        kwargs['language'] = 'c'
         if GIExtension.smart_index:
             return self.__smart_filter(*args, **kwargs)
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)

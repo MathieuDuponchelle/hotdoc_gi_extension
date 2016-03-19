@@ -266,6 +266,10 @@ class GIHtmlFormatter(HtmlFormatter):
 
         return out
 
+    def get_output_folder(self):
+        return os.path.join(super(GIHtmlFormatter, self).get_output_folder(),
+            self.__gi_extension.language)
+
     def _get_assets_path(self):
         return os.path.join('..', 'assets')
 
