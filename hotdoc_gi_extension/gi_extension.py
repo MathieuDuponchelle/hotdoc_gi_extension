@@ -224,6 +224,12 @@ class GIExtension(BaseExtension):
         return headers
 
     def gi_index_handler (self, doc_tree):
+        if not GIExtension.sources:
+            self.warn('parsing-issue',
+                      'gobject-api well-known-name encountered, '
+                      'but no gir-files were provided (see gi-sources)')
+            return None
+
         if self.__gen_index_path is not None:
             return self.__gen_index_path, 'c', 'gi-extension'
 
