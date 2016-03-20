@@ -40,7 +40,8 @@ setup(
         'hotdoc_gi_extension.transition_scripts': ['translate_sections.sh'],
     },
 
-    scripts=['hotdoc_gi_extension/transition_scripts/gtk_doc_porter'],
+    scripts=['hotdoc_gi_extension/transition_scripts/gtk_doc_porter',
+             'hotdoc_gi_extension/transition_scripts/gtk_doc_scan_parser'],
 
     entry_points = {'hotdoc.extensions': 'get_extension_classes = hotdoc_gi_extension.gi_extension:get_extension_classes'},
     install_requires = [
