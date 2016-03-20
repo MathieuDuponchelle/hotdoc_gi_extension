@@ -36,8 +36,9 @@ import yaml
 from lxml import etree
 
 from hotdoc.utils.patcher import Patcher
-from hotdoc.utils.utils import OrderedSet
+from hotdoc.utils.utils import OrderedSet, recursive_overwrite
 from hotdoc.core.symbols import *
+from hotdoc.core.config import ConfigParser
 from hotdoc.core.doc_repo import DocRepo
 from hotdoc.core.exceptions import HotdocException
 from hotdoc.core.doc_database import DocDatabase
@@ -165,7 +166,7 @@ class DocRepoMonitor(object):
 
             sym = self.doc_repo.doc_database.get_symbol(section.title or name)
             if sym and type(sym) is StructSymbol:
-                class_name = '%s::%s' % (sym.unique_name, sym.unique_name)
+                class_name = u'%s::%s' % (sym.unique_name, sym.unique_name)
                 class_sym = self.doc_repo.doc_database.get_symbol(class_name)
                 if class_sym:
                     new_name = class_name + ':'
@@ -379,7 +380,7 @@ class Section(object):
         self.ofile = None
         self.title = None
         self.symbols = set()
-        if node:
+        if node is not None:
             self.ofile = unicode(node.find('FILE').text)
             tnode = node.find('TITLE')
             if tnode is not None:
@@ -581,3 +582,19 @@ if __name__=='__main__':
     patcher = Patcher()
     patch_comments(patcher, monitor.class_comments.values() +
         monitor.section_comments.values())
+
+    extra_conf = {
+        'gi_index': 'gi-index.markdown',
+        'languages': ['c', 'python', 'javascript'],
+        'output': 'built_doc',
+        'gtk_doc_escape_html': True,
+        'page_parser_escape_html': True,
+        }
+
+    ncp = ConfigParser(conf_file=args.conf_file,
+        command_line_args=extra_conf)
+
+    ncp.dump(args.conf_file)
+
+    recursive_overwrite(MD_OUTPUT_PATH, monitor.doc_repo.get_base_doc_folder())
+    shutil.rmtree(MD_OUTPUT_PATH)
