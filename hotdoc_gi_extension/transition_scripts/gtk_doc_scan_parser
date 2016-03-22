@@ -22,7 +22,9 @@ import os
 import fileinput
 import argparse
 import shutil
+
 from hotdoc.core.config import ConfigParser
+from hotdoc.utils.utils import OrderedSet
 
 def _parse_cflags(line):
     extra_flags = set()
@@ -39,7 +41,7 @@ def _parse_cflags(line):
     return extra_flags, incdirs
 
 def _walk_source_dir(source_dir, ignored):
-    sources = []
+    sources = OrderedSet()
     for root, dirs, files in os.walk(source_dir):
         if os.path.basename(root) in ignored:
             continue
@@ -49,23 +51,25 @@ def _walk_source_dir(source_dir, ignored):
             if fname in ignored:
                 continue
 
-            sources.append(os.path.join(root, fname))
+            sources.add(os.path.join(root, fname))
     return sources
 
 def _parse_sources(line):
     line = line.replace("'", ' ')
     line = line.replace('=', ' ')
     parser = argparse.ArgumentParser()
-    parser.add_argument('--source-dir', nargs='+', dest="source_dir")
+    parser.add_argument('--source-dir', dest="source_dir", action='append')
     parser.add_argument('--ignore-headers', nargs='+', dest="ignore_headers")
     args = parser.parse_known_args(line.split())
 
     ignored = args[0].ignore_headers or []
 
-    all_sources = []
+    all_sources = OrderedSet()
+
+    print args[0].source_dir
 
     for source_dir in args[0].source_dir:
-        all_sources += _walk_source_dir(source_dir, ignored)
+        all_sources |= _walk_source_dir(source_dir, ignored)
 
     return all_sources
 
@@ -81,11 +85,15 @@ if __name__=='__main__':
         print "USAGE : %s gir_file" % sys.argv[0]
         sys.exit(1)
 
-    extra_cflags = None
-    incdirs = None
+    extra_cflags = []
+    incdirs = []
     sources = None
     for line in fileinput.input(('-',)):
-        if line.startswith('++ gcc') and extra_cflags is None:
+        if line.startswith('++ gcc') and not extra_cflags:
+            extra_cflags, incdirs = _parse_cflags(line)
+        elif line.strip().startswith('CC=') and \
+                not extra_cflags:
+            line = line.replace('"', ' ')
             extra_cflags, incdirs = _parse_cflags(line)
         elif line.startswith('+ gtkdoc-scan') and 'source-dir' in line:
             sources = _parse_sources(line)
