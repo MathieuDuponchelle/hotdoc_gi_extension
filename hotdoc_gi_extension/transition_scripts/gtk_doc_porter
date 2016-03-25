@@ -288,6 +288,9 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
     parser.resolvers.add(resolver)
     root = etree.parse(filename, parser=parser).getroot()
 
+    if root is None:
+        return
+
     NSMAP.update(root.nsmap)
 
     for error in parser.error_log:
@@ -320,8 +323,8 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
             md_path = os.path.basename(md_path)
         replace_with_link(node, md_path, bname)
 
-        if is_version_controlled(dir_, os.path.basename(href)):
-            subpages[bname] = os.path.join(dir_, os.path.basename(href))
+        if is_version_controlled(dir_, href):
+            subpages[bname] = os.path.join(dir_, href)
         elif new_name == 'index':
             grandparent = parent.getparent()
             already_added = False
