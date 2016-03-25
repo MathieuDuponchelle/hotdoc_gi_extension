@@ -196,7 +196,8 @@ class GIExtension(BaseExtension):
         GIExtension.add_sources_argument(group, allow_filters=False)
         group.add_argument ("--languages", action="store",
                 nargs='*',
-                help="Languages to translate documentation in (c, python, javascript)")
+                help="Languages to translate documentation in (c, python,"
+                     "javascript), default is to make all languages")
 
     @staticmethod
     def parse_config(doc_repo, config):
@@ -207,6 +208,8 @@ class GIExtension(BaseExtension):
         if 'c' in GIExtension.languages:
             GIExtension.languages.remove ('c')
             GIExtension.languages.insert (0, 'c')
+        if not GIExtension.languages:
+            GIExtension.languages = ['c', 'python', 'javascript']
 
     @staticmethod
     def get_dependencies ():
