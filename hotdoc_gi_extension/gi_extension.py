@@ -126,7 +126,7 @@ Must be used in combination with the C extension.
 
 
 class GIExtension(BaseExtension):
-    EXTENSION_NAME = "gi-extension"
+    extension_name = "gi-extension"
     argument_prefix = "gi"
     smart_index = False
     languages = None
@@ -135,9 +135,6 @@ class GIExtension(BaseExtension):
         BaseExtension.__init__(self, doc_repo)
 
         self.language = 'c'
-
-        doc_repo.doc_tree.page_parser.register_well_known_name ('gobject-api',
-                self.gi_index_handler)
 
         self.__nsmap = {'core': 'http://www.gtk.org/introspection/core/1.0',
                       'c': 'http://www.gtk.org/introspection/c/1.0',
@@ -226,20 +223,6 @@ class GIExtension(BaseExtension):
         headers = [s for s in CExtension.sources if s.endswith('.h')]
         return headers
 
-    def gi_index_handler (self, doc_tree):
-        if not GIExtension.sources:
-            self.warn('parsing-issue',
-                      'gobject-api well-known-name encountered, '
-                      'but no gir-files were provided (see gi-sources)')
-            return None
-
-        if self.__gen_index_path is not None:
-            return self.__gen_index_path, 'c', 'gi-extension'
-
-        index_path = find_md_file(GIExtension.index, self.doc_repo.include_paths)
-
-        return index_path, 'c', 'gi-extension'
-
     def setup (self):
         if not GIExtension.sources:
             return
@@ -247,9 +230,6 @@ class GIExtension(BaseExtension):
         self.info('Gathering legacy gtk-doc links')
         self.__gather_gtk_doc_links()
         Page.resolving_symbol_signal.connect (self.__resolving_symbol)
-
-        if not GIExtension.index or GIExtension.smart_index:
-            self.update_naive_index(GIExtension.smart_index)
 
     def format_page(self, page, link_resolver, output):
         LinkResolver.get_link_signal.connect(self.__search_legacy_links)
@@ -267,12 +247,6 @@ class GIExtension(BaseExtension):
     def __maybe_generate_index(self):
         if not GIExtension.sources:
             return
-
-        if not GIExtension.index or GIExtension.smart_index:
-            headers = self._get_all_sources()
-            self.debug("Creating naive index for %d header files" % (
-                len(headers)))
-            self.__gen_index_path, _, __ = self.create_naive_index(headers)
 
     def __find_gir_file(self, gir_name):
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
@@ -512,17 +486,21 @@ class GIExtension(BaseExtension):
         except KeyError:
             pass
 
+        """
         try:
             self.doc_repo.doc_tree.page_parser.renaming_page_link_signal.disconnect(
                     self.__rename_page_link)
         except KeyError:
             pass
+        """
 
         if language is not None:
             Link.resolving_link_signal.connect(self.__translate_link_ref)
             Link.resolving_title_signal.connect(self.__translate_link_title)
+            """
             self.doc_repo.doc_tree.page_parser.renaming_page_link_signal.connect(
                     self.__rename_page_link)
+            """
 
         if language == 'c':
             self._fundamentals = {}
@@ -1003,7 +981,7 @@ class GIExtension(BaseExtension):
         return res
 
     def __resolving_symbol (self, page, symbol):
-        if page.extension_name != self.EXTENSION_NAME:
+        if page.extension_name != self.extension_name:
             return []
 
         return self.__update_symbol(symbol)
