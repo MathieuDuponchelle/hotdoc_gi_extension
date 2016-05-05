@@ -29,8 +29,6 @@ import cgi
 
 from copy import deepcopy
 
-import ipdb
-
 import yaml
 
 from lxml import etree
@@ -42,6 +40,7 @@ from hotdoc.core.config import ConfigParser
 from hotdoc.core.doc_repo import DocRepo
 from hotdoc.core.exceptions import HotdocException
 from hotdoc.core.doc_database import DocDatabase
+from hotdoc.core.links import Link
 from hotdoc.parsers.gtk_doc_parser import GtkDocStringFormatter
 from hotdoc_gi_extension.gi_extension import GIExtension
 from hotdoc.utils.loggable import warn, info, debug, Logger
@@ -144,7 +143,7 @@ class DocRepoMonitor(object):
         self.doc_repo = DocRepo()
         self.doc_repo.setup(args)
         self.naive_pages = {}
-        for name, page in self.doc_repo.doc_tree.pages.items():
+        for name, page in self.doc_repo.doc_tree.get_pages().items():
             bname = os.path.basename(name)
 
             if not bname.startswith('gen-'):
@@ -238,12 +237,14 @@ def replace_with_link(node, md_name, label):
     new_node.append(title)
     parent.replace(node, new_node)
 
-def dump_gi_index(standalones, md_paths):
-    md_content = '# API Reference\n\n'
+def dump_gi_index(page, standalones, md_paths):
+    md_content = '---\n'
+    md_content += 'short-description: GObject API Reference Manual\n'
+    md_content += '...\n\n'
+    md_content += '# API Reference\n\n'
 
     parent = standalones[0].getparent()
-    replace_with_link(standalones[0], 'gobject-api',
-        'API Reference')
+    parent.remove(standalones[0])
 
     if len(standalones) == 1:
         db_content = etree.tostring(standalones[0])
@@ -267,16 +268,42 @@ def dump_gi_index(standalones, md_paths):
             sub_md_content = db_to_md (db_content)
             with open(md_path, 'w') as f:
                 f.write(sub_md_content)
-            md_content += '#### [%s](%s)\n\n' % (
-                title, urllib.quote(os.path.basename(md_path)))
 
     md_path = os.path.join(MD_OUTPUT_PATH, 'gi-index.markdown')
     with open(md_path, 'w') as f:
         f.write (md_content)
 
-NSMAP = {}
+NSMAP = {'xml': 'http://www.w3.org/XML/1998/namespace'}
 
-def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
+def collect_xrefs(doc_repo, filename, root):
+    id_nodes = root.xpath('.//*[@id]')
+    id_nodes.extend(root.xpath('.//*[@xml:id]', namespaces=NSMAP))
+    if 'id' in root.attrib or '{%s}id' % NSMAP['xml'] in root.attrib:
+        id_nodes.append(root)
+
+    for node in id_nodes:
+        title = node.find('.//refentrytitle')
+        if title is None:
+            title = node.find('.//{http://docbook.org/ns/docbook}refentrytitle')
+        if title is None:
+            title = node.find('.//title')
+        if title is None:
+            title = node.find('.//{http://docbook.org/ns/docbook}title')
+
+        id_ = node.attrib.get('id') or node.attrib.get('{%s}id' % NSMAP['xml'])
+
+        if title is None:
+            title = id_
+        else:
+            title = "".join([x for x in title.itertext()]).strip()
+
+        ref = stripped_basename(filename) + '.markdown'
+        if node != root:
+            ref += '#' + title.lower().replace(' ', '-')
+        link = Link(ref, title, id_)
+        doc_repo.link_resolver.add_link(link)
+
+def translate_docbook(filename, resolver, md_paths, new_name, doc_repo, files_to_render, parent_page):
     with open(filename, 'r') as _:
         xincluded = _.read()
 
@@ -292,6 +319,7 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
         return
 
     NSMAP.update(root.nsmap)
+    NSMAP.pop(None, None)
 
     for error in parser.error_log:
         print error
@@ -316,36 +344,20 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
             parent.remove(node)
             continue
 
-        if bname in smart_links:
-            md_path = smart_links[bname] + '.markdown'
-        else:
-            md_path = get_free_md_path(md_paths, bname)
-            md_path = os.path.basename(md_path)
-        replace_with_link(node, md_path, bname)
+        md_path = get_free_md_path(md_paths, bname)
+        md_path = os.path.basename(md_path)
+        parent.remove(node)
 
         if is_version_controlled(dir_, href):
             subpages[bname] = os.path.join(dir_, href)
         elif new_name == 'index':
             grandparent = parent.getparent()
-            already_added = False
             while grandparent is not None and grandparent not in standalones:
                 grandparent = grandparent.getparent()
 
-            if not already_added:
-                standalones.add(parent)
+            standalones.add(parent)
 
     metadict = {}
-
-    for node in root.findall('.//refmeta'):
-        for c in node:
-            meta =  "".join([x for x in c.itertext()])
-            metadict[c.tag] = meta
-        parent = node.getparent()
-        parent.remove(node)
-
-    if metadict:
-        with open (os.path.join (MD_OUTPUT_PATH, new_name + ".yaml"), 'w') as f:
-            f.write(yaml.dump(metadict, default_flow_style=False))
 
     refnamediv = root.find('./refnamediv')
     bookinfo = root.find('./bookinfo')
@@ -359,22 +371,35 @@ def translate_docbook(filename, smart_link, resolver, md_paths, new_name):
         root.remove(refnamediv)
         refname = refnamediv.find('./refname')
         if refname is not None:
-            md_content += '# %s\n\n' % "".join(
-                [x for x in refname.itertext()])
+            metadict['title'] = "".join([x for x in refname.itertext()]).strip()
         refpurpose = refnamediv.find('./refpurpose')
         if refpurpose is not None:
-            md_content += '%s\n' % "".join(
-                [x for x in refpurpose.itertext()])
+            short =  "".join([x for x in refpurpose.itertext()]).strip()
+            metadict['short-description'] = short.replace('\n', '')
+
+    if metadict:
+        md_content += '---\n'
+        md_content += yaml.dump(metadict, default_flow_style=False)
+        md_content += '...\n\n'
+
+
+    collect_xrefs(doc_repo, filename, root)
+
+
+    files_to_render[md_paths[new_name]] = (root, md_content)
+    parent_page['url'] = md_paths[new_name]
+    parent_page['subpages'] = []
 
     if standalones:
-        dump_gi_index(list(standalones), md_paths)
-
-    md_content += db_to_md (etree.tostring(root))
-    with open (md_paths[new_name], 'w') as f:
-        f.write (md_content)
+        cpage = {'url': 'gi-index',
+                 'subpages': []}
+        parent_page['subpages'].append(cpage)
+        dump_gi_index(cpage, list(standalones), md_paths)
 
     for new_name, filename in subpages.items():
-        translate_docbook(filename, smart_links, resolver, md_paths, new_name)
+        cpage = {}
+        translate_docbook(filename, resolver, md_paths, new_name, doc_repo, files_to_render, cpage)
+        parent_page['subpages'].append(cpage)
 
 class Section(object):
     def __init__(self, node):
@@ -418,18 +443,24 @@ def write_symbols(monitor, section):
     not_found = 0
     found = 0
     opath = os.path.join(MD_OUTPUT_PATH, section.ofile + '.markdown')
+    contents = u''
 
-    with io.open(opath, 'w+', encoding='utf-8') as f:
+    with io.open(opath, 'w', encoding='utf-8') as f:
+        metadict = {}
+        metadict['symbols'] = []
         if section.comment:
             if section.comment.title:
-                f.write(u"### %s\n\n" % cgi.escape(section.comment.title))
+                metadict['title'] = cgi.escape(section.comment.title)
             elif section.title:
-                f.write(u"### %s\n\n" % cgi.escape(section.title))
+                metadict['title'] = cgi.escape(section.title)
             if section.comment.short_description:
-                f.write(u'%s\n\n' %
-                    translate(section.comment.short_description))
+                short = translate(section.comment.short_description)
+                metadict['short-description'] = short.replace('\n', '')
             if section.comment.description:
-                f.write(u'%s\n\n' % translate(section.comment.description))
+                desc = section.comment.description.split('\n')
+                for i, line in enumerate(desc):
+                    desc[i] = line.strip()
+                contents = u'%s\n' % translate('\n'.join(desc))
         for symbol in section.symbols:
             sym = monitor.doc_repo.doc_database.get_symbol(symbol)
             if sym is None:
@@ -438,17 +469,23 @@ def write_symbols(monitor, section):
                 "be found" % (symbol, section.ofile), 'gtk-doc-port')
                 not_found += 1
             else:
-                f.write(u'* [%s]()\n' % symbol)
+                metadict['symbols'].append(symbol)
                 found += 1
-
+        f.write(u'---\n')
+        f.write(unicode(yaml.dump(metadict, default_flow_style=False)))
+        f.write(u'...\n\n')
+        f.write(contents)
+    
     return not_found
 
 def translate_sections(monitor, sections):
     not_found = 0
     n_symbols = 0
+    gi_subpages = []
     for sname, section in sections.items():
         not_found += write_symbols(monitor, section)
         n_symbols += len(section.symbols)
+        gi_subpages.append(section.ofile + '.markdown')
 
     if not_found:
         warn('section-symbol-not-found',
@@ -459,23 +496,7 @@ def translate_sections(monitor, sections):
             "Rerun this tool with HOTDOC_DEBUG=2 to see the full list "
             "of missing symbols." % (not_found, n_symbols))
 
-def dump_smart_page(npage, name, section):
-    ssymbols = section.symbols
-    nsymbols = set(npage.symbol_names)
-    extra = ssymbols - nsymbols
-    write_symbols(section, name, extra)
-
-def dump_smart_index(monitor, sections):
-    """
-    smart_links = {}
-    for nname, npage in monitor.naive_pages.items():
-        section = sections.pop(nname, None)
-        smart_links[section.ofile] = nname
-        dump_smart_page(npage, nname, section)
-    """
-
-    for sname, s in sections.items():
-        write_symbols(s, sname, s.symbols)
+    return gi_subpages
 
 def patch_comments(patcher, comments):
     if not comments:
@@ -494,7 +515,7 @@ def patch_comments(patcher, comments):
 
 def sections_from_naive_pages(monitor):
     sections = {}
-    for nname, npage in monitor.doc_repo.doc_tree.pages.items():
+    for nname, npage in monitor.doc_repo.doc_tree.get_pages().items():
         if not \
             npage.source_file.startswith(monitor.doc_repo.get_generated_doc_folder()):
             continue
@@ -516,6 +537,54 @@ def sections_from_naive_pages(monitor):
 
     return sections
 
+def dump_sitemap(page, gi_subpages, level=0):
+    if not page:
+        return
+
+    with open('sitemap.txt', 'a') as _:
+        _.write('\t' * level + os.path.basename(page['url']) + '\n')
+        if page['url'] == 'gi-index':
+            for url in gi_subpages:
+                _.write('\t' * (level + 1) + url + '\n')
+    for cpage in page['subpages']:
+        dump_sitemap(cpage, gi_subpages, level + 1)
+
+def render_files(files_to_render, doc_repo):
+    for md_path, tup in files_to_render.items():
+        root, md_content = tup
+        links = root.findall('.//link')
+        links.extend(root.findall('.//xref'))
+        links.extend(root.findall('.//{http://docbook.org/ns/docbook}link'))
+        links.extend(root.findall('.//{http://docbook.org/ns/docbook}xref'))
+
+        for link_node in links:
+            linkend = link_node.attrib.get('linkend')
+            if linkend is None:
+                continue
+
+            sym_name = linkend.replace('-', '_')
+            if sym_name.endswith(':CAPS'):
+                sym_name = sym_name[:-5]
+            link = doc_repo.link_resolver.get_named_link(sym_name)
+            if link is None:
+                link = doc_repo.link_resolver.get_named_link(linkend)
+
+            symbol = doc_repo.doc_database.get_symbol(sym_name)
+            if link:
+                if symbol:
+                    link_node.attrib['url'] = link.id_
+                else:
+                    link_node.attrib['url'] = link.get_link()
+
+                if link_node.tag == 'xref':
+                    link_node.text = link.get_title()
+
+                link_node.tag = 'ulink'
+                continue
+
+        md_content += db_to_md (etree.tostring(root))
+        with open (md_path, 'w') as f:
+            f.write (md_content)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -535,7 +604,9 @@ if __name__=='__main__':
 
     args = parser.parse_args()
     # Ensure we build from scratch
-    shutil.rmtree('hotdoc-private', ignore_errors=True)
+    for dirname in os.listdir('.'):
+        if dirname.startswith('hotdoc-private'):
+            shutil.rmtree(dirname)
     shutil.rmtree(MD_OUTPUT_PATH, ignore_errors=True)
 
     os.mkdir(MD_OUTPUT_PATH)
@@ -543,16 +614,18 @@ if __name__=='__main__':
     require_path(args.conf_file)
     require_path(args.docbook_index)
 
-    hdargs = ['run', '--conf-file', args.conf_file]
+    hdargs = ['run', '--conf-file', args.conf_file, '--gi-smart-index']
     monitor = DocRepoMonitor()
     monitor.build(hdargs)
+
+    gi_subpages = []
 
     if args.section_file is not None:
         require_path(args.section_file)
         sections = parse_section_file(args.section_file,
             monitor.section_comments)
         monitor.sort_section_comments(sections)
-        translate_sections(monitor, sections)
+        gi_subpages = translate_sections(monitor, sections)
     else:
         sections = sections_from_naive_pages(monitor)
         monitor.sort_section_comments(sections)
@@ -574,13 +647,19 @@ if __name__=='__main__':
                         if section_comment.description:
                             f.write(u'%s\n\n' % translate(section_comment.description))
 
-
-    smart_links = {}
-
     resolver = DTDResolver(args.extra_dtd_paths)
     md_paths = {'gi-index': os.path.join(MD_OUTPUT_PATH, 'gi-index.markdown')}
     md_paths['index'] = os.path.join(MD_OUTPUT_PATH, 'index.markdown')
-    translate_docbook(args.docbook_index, smart_links, resolver, md_paths, 'index')
+
+    files_to_render = {}
+    sitemap_root = {}
+    translate_docbook(args.docbook_index, resolver, md_paths, 'index',
+        monitor.doc_repo, files_to_render, sitemap_root)
+
+    os.unlink('sitemap.txt')
+    dump_sitemap(sitemap_root, gi_subpages)
+
+    render_files(files_to_render, monitor.doc_repo)
 
     patcher = Patcher()
     patch_comments(patcher, monitor.class_comments.values() +

@@ -59,14 +59,12 @@ def _parse_sources(line):
     line = line.replace('=', ' ')
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-dir', dest="source_dir", action='append')
-    parser.add_argument('--ignore-headers', nargs='+', dest="ignore_headers")
+    parser.add_argument('--ignore-headers', nargs='*', dest="ignore_headers")
     args = parser.parse_known_args(line.split())
 
     ignored = args[0].ignore_headers or []
 
     all_sources = OrderedSet()
-
-    print args[0].source_dir
 
     for source_dir in args[0].source_dir:
         all_sources |= _walk_source_dir(source_dir, ignored)
@@ -104,10 +102,19 @@ if __name__=='__main__':
 
     _create_basic_index()
 
+    with open('markdown_files/gi-index.markdown', 'w') as _:
+        _.write('# Placeholder')
+
+    with open('sitemap.txt', 'w') as _:
+        _.write('index.markdown\n')
+        _.write('\tgi-index\n')
+
     conf = {'index': 'markdown_files/index.markdown',
+            'gi_index': 'gi-index.markdown',
             'gi_sources': [sys.argv[1]],
             'c_sources': list(sources),
             'extra_c_flags': list(extra_cflags),
+            'sitemap': 'sitemap.txt',
             'c_include_directories': list(incdirs)}
 
     cp = ConfigParser(command_line_args=conf)
