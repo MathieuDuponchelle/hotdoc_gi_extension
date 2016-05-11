@@ -283,22 +283,22 @@ class GIExtension(BaseExtension):
         for node in gir_root.xpath(
                 './/core:property',
                 namespaces=self.__nsmap):
-            name = '%s:%s' % (node.getparent().attrib['{%s}type' %
-                self.__nsmap['c']], node.attrib['name'])
+            name = '%s:%s' % (self.__get_klass_name(node.getparent()),
+                              node.attrib['name'])
             self.__node_cache[name] = node
 
         for node in gir_root.xpath(
                 './/glib:signal',
                 namespaces=self.__nsmap):
-            name = '%s::%s' % (node.getparent().attrib['{%s}type' %
-                self.__nsmap['c']], node.attrib['name'])
+            name = '%s::%s' % (self.__get_klass_name(node.getparent()),
+                               node.attrib['name'])
             self.__node_cache[name] = node
 
         for node in gir_root.xpath(
                 './/core:virtual-method',
                 namespaces=self.__nsmap):
-            name = '%s:::%s' % (node.getparent().attrib['{%s}type' %
-                self.__nsmap['c']], node.attrib['name'])
+            name = '%s:::%s' % (self.__get_klass_name(node.getparent()),
+                                node.attrib['name'])
             self.__node_cache[name] = node
 
         for inc in gir_root.findall('./core:include',
