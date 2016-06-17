@@ -9,27 +9,7 @@ gkt-doc to hotdoc.
 
 ### Install instructions:
 
-This extension relies on lxml to parse the gir files.
-
-It also requires libxslt to be installed for the gtk-doc port
-wizard to work.
-
-On Fedora 22 the dependencies can be installed with:
-
-```
-dnf install libxml2-devel libxslt-devel
-```
-
-On Debian / Ubuntu:
-
-```
-apt-get install libxml2-dev libxslt1-dev
-```
-
-If you use this extension in another environment, please let me know
-how you installed these requirements :)
-
-You can then install this extension either through pip:
+You can install this extension either through pip:
 
 ```
 pip install hotdoc_gi_extension
