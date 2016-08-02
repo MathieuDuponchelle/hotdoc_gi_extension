@@ -57,10 +57,16 @@ from hotdoc.core.base_formatter import Formatter
 from hotdoc.core.file_includer import find_md_file
 from hotdoc.core.links import Link, LinkResolver
 from hotdoc.core.doc_tree import Page
+from hotdoc.core.exceptions import BadInclusionException
+from hotdoc.utils.loggable import warn, Logger
 
 from .gi_html_formatter import GIHtmlFormatter
 from .gi_annotation_parser import GIAnnotationParser
 from .fundamentals import PY_FUNDAMENTALS, JS_FUNDAMENTALS
+
+
+Logger.register_warning_code('missing-gir-include', BadInclusionException,
+                             'gi-extension')
 
 
 class Flag (object):
@@ -249,6 +255,10 @@ class GIExtension(BaseExtension):
             return
 
     def __find_gir_file(self, gir_name):
+        for source in self.sources:
+            if os.path.basename(source) == gir_name:
+                return source
+
         xdg_dirs = os.getenv('XDG_DATA_DIRS') or ''
         xdg_dirs = [p for p in xdg_dirs.split(':') if p]
         xdg_dirs.append(self.doc_repo.datadir)
@@ -308,7 +318,8 @@ class GIExtension(BaseExtension):
             gir_file = self.__find_gir_file('%s-%s.gir' % (inc_name,
                 inc_version))
             if not gir_file:
-                print "Couldn't find a gir for", inc_name, inc_version
+                warn('missing-gir-include', "Couldn't find a gir for %s-%s.gir" %
+                        (inc_name, inc_version))
                 continue
 
             if gir_file in self.__parsed_girs:
