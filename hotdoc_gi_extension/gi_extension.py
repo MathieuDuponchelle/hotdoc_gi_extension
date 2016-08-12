@@ -371,9 +371,6 @@ class GIExtension(BaseExtension):
         return hierarchy
 
     def __gather_gtk_doc_links (self):
-        from datetime import datetime
-
-        n = datetime.now()
         gtkdoc_dir = os.path.join(self.doc_repo.datadir, "gtk-doc", "html")
         if not os.path.exists(gtkdoc_dir):
             print "no gtk doc to gather links from in %s" % gtkdoc_dir
@@ -387,7 +384,6 @@ class GIExtension(BaseExtension):
                         self.__parse_sgml_index(dir_)
                     except IOError:
                         pass
-        print datetime.now() -n
 
     def __parse_devhelp_index(self, dir_):
         path = os.path.join(dir_, os.path.basename(dir_) + '.devhelp2')
@@ -406,7 +402,6 @@ class GIExtension(BaseExtension):
         return True
 
     def __parse_sgml_index(self, dir_):
-        print "doing", dir_
         remote_prefix = ""
         with open(os.path.join(dir_, "index.sgml"), 'r') as f:
             for l in f:
