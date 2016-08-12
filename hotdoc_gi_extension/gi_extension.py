@@ -371,20 +371,42 @@ class GIExtension(BaseExtension):
         return hierarchy
 
     def __gather_gtk_doc_links (self):
-        sgml_dir = os.path.join(self.doc_repo.datadir, "gtk-doc", "html")
-        if not os.path.exists(sgml_dir):
-            print "no gtk doc to gather links from in %s" % sgml_dir
+        from datetime import datetime
+
+        n = datetime.now()
+        gtkdoc_dir = os.path.join(self.doc_repo.datadir, "gtk-doc", "html")
+        if not os.path.exists(gtkdoc_dir):
+            print "no gtk doc to gather links from in %s" % gtkdoc_dir
             return
 
-        for node in os.listdir(sgml_dir):
-            dir_ = os.path.join(sgml_dir, node)
+        for node in os.listdir(gtkdoc_dir):
+            dir_ = os.path.join(gtkdoc_dir, node)
             if os.path.isdir(dir_):
-                try:
-                    self.__parse_sgml_index(dir_)
-                except IOError:
-                    pass
+                if not self.__parse_devhelp_index(dir_):
+                    try:
+                        self.__parse_sgml_index(dir_)
+                    except IOError:
+                        pass
+        print datetime.now() -n
+
+    def __parse_devhelp_index(self, dir_):
+        path = os.path.join(dir_, os.path.basename(dir_) + '.devhelp2')
+        if not os.path.exists(path):
+            return False
+
+        dh_root = etree.parse(path).getroot()
+        online = dh_root.attrib.get('online')
+        if not online:
+            return False
+
+        keywords = dh_root.findall('.//{http://www.devhelp.net/book}keyword')
+        for kw in keywords:
+            self.__gtkdoc_hrefs[kw.attrib["name"]] = online + kw.attrib["link"]
+
+        return True
 
     def __parse_sgml_index(self, dir_):
+        print "doing", dir_
         remote_prefix = ""
         with open(os.path.join(dir_, "index.sgml"), 'r') as f:
             for l in f:
