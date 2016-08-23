@@ -248,8 +248,8 @@ class GIHtmlFormatter(HtmlFormatter):
             out = self._docstring_formatter.ast_to_html(
                 ast, link_resolver)
         else:
-            ast = self._docstring_formatter.to_ast(
-                comment.description, link_resolver)
+            ast = self._docstring_formatter.comment_to_ast(
+                comment, link_resolver)
             out = self._docstring_formatter.ast_to_html(
                 ast, link_resolver)
             comment.extension_attrs['gi-extension']['ast'] = ast
