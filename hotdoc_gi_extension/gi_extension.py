@@ -399,11 +399,15 @@ class GIExtension(BaseExtension):
         for kw in keywords:
             self.__gtkdoc_hrefs[kw.attrib["name"]] = online + kw.attrib["link"]
 
+        self.debug('Gathered %d links from devhelp index %s' % (len(keywords), path)) 
+
         return True
 
     def __parse_sgml_index(self, dir_):
         remote_prefix = ""
-        with open(os.path.join(dir_, "index.sgml"), 'r') as f:
+        n_links = 0
+        path = os.path.join(dir_, "index.sgml")
+        with open(path, 'r') as f:
             for l in f:
                 if l.startswith("<ONLINE"):
                     remote_prefix = l.split('"')[1]
@@ -422,6 +426,10 @@ class GIExtension(BaseExtension):
                         href = filename
 
                     self.__gtkdoc_hrefs[title] = href
+                    n_links += 1
+
+        if n_links > 0:
+            self.debug('Gathered %d links from sgml index %s' % (n_links, path)) 
 
     def __add_annotations (self, formatter, symbol):
         if self.language == 'c':
