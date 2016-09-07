@@ -277,12 +277,13 @@ class GIExtension(BaseExtension):
 
         id_type = '{%s}type' % self.__nsmap['c']
         class_tag = '{%s}class' % self.__nsmap['core']
+        interface_tag = '{%s}interface' % self.__nsmap['core']
         for node in gir_root.xpath(
                 './/*[not(self::core:type) and not (self::core:array)][@c:type]',
                 namespaces=self.__nsmap):
             name = node.attrib[id_type]
             self.__node_cache[name] = node
-            if node.tag == class_tag:
+            if node.tag in [class_tag, interface_tag]:
                 gi_name = '.'.join(self.__get_gi_name_components(node))
                 self.__class_nodes[gi_name] = node
                 get_type_function = node.attrib.get('{%s}get-type' %
@@ -586,6 +587,11 @@ class GIExtension(BaseExtension):
                     self.debug('Dropping class structure %s' % name)
                     self.debug('Document it if you want it to be included')
                     return None
+                disguised = node.attrib.get('disguised')
+                if disguised == '1':
+                    self.debug("Dropping private structure %s" % name)
+                    self.__dropped_symbols.add(name)
+                    return None
 
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
@@ -874,6 +880,15 @@ class GIExtension(BaseExtension):
 
         return class_symbol
 
+    def __create_interface_symbol (self, node, symbol, gi_name):
+        comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
+        comment = self.doc_repo.doc_database.get_comment(comment_name)
+
+        return self.get_or_create_symbol(InterfaceSymbol,
+                comment=comment,
+                display_name=symbol.display_name,
+                unique_name=comment_name)
+
     def __get_gi_name_components(self, node):
         parent = node.getparent()
         components = [node.attrib['name']]
@@ -942,6 +957,8 @@ class GIExtension(BaseExtension):
 
         if node.tag == '{%s}class' % self.__nsmap['core']:
             symbols.append(self.__create_class_symbol (symbol, gi_name))
+        elif node.tag == '{%s}interface' % self.__nsmap['core']:
+            symbols.append(self.__create_interface_symbol (node, symbol, gi_name))
 
         klass_name = node.attrib.get('{%s}type-name' %
                 'http://www.gtk.org/introspection/glib/1.0')

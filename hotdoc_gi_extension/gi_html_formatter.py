@@ -39,18 +39,6 @@ class GIHtmlFormatter(HtmlFormatter):
         out = template.render ({'flags': flags})
         return out
 
-    def _format_callable_summary (self, callable_, return_value, function_name,
-            is_callable, is_pointer):
-        if self.__gi_extension.language in ["python", "javascript"]:
-            is_pointer = False
-            return_value = None
-        elif self.__gi_extension.language in ['c']:
-            if not return_value:
-                return_value = 'void'
-
-        return HtmlFormatter._format_callable_summary (self, callable_, return_value,
-                function_name, is_callable, is_pointer)
-
     def _format_type_tokens (self, type_tokens):
         if self.__gi_extension.language != 'c':
             new_tokens = []
@@ -148,65 +136,6 @@ class GIHtmlFormatter(HtmlFormatter):
             'out_params': [], 'is_method': function.is_method})
 
         return res
-
-    def _format_property_summary (self, prop):
-        if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_property_summary (self, prop)
-
-        template = self.engine.get_template('property_summary.html')
-        property_type = None
-
-        prop_link = self._format_linked_symbol (prop)
-
-        tags = {}
-        if prop.comment:
-            tags = prop.comment.tags
-
-        return template.render({
-                                'symbol': prop,
-                                'tags': tags,
-                                'property_type': property_type,
-                                'property_link': prop_link,
-                                'extra_contents': prop.extension_contents,
-                               })
-
-    def _format_gi_vmethod_summary (self, vmethod):
-        if self.__gi_extension.language == 'python':
-            vmethod.link.title = 'do_%s' % vmethod._make_name()
-        elif self.__gi_extension.language == 'javascript':
-            vmethod.link.title = '%s::%s' % (vmethod.gi_parent_name, vmethod._make_name())
-        return self._format_callable_summary (
-                self._format_linked_symbol (vmethod.return_value),
-                self._format_linked_symbol (vmethod),
-                True,
-                True,
-                [])
-
-    def _format_compound_summary (self, compound):
-        template = self.engine.get_template('python_compound_summary.html')
-        link = self._format_linked_symbol (compound)
-        return template.render({'symbol': compound,
-                                'compound': link})
-
-    def _format_struct_summary (self, struct):
-        if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_struct_summary (self, struct)
-        return self._format_compound_summary (struct)
-
-    def _format_enum_summary (self, enum):
-        if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_enum_summary (self, enum)
-        return self._format_compound_summary (enum)
-
-    def _format_alias_summary (self, alias):
-        if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_alias_summary (self, alias)
-        return self._format_compound_summary (alias)
-
-    def _format_constant_summary (self, constant):
-        if self.__gi_extension.language == 'c':
-            return HtmlFormatter._format_constant_summary (self, constant)
-        return self._format_compound_summary (constant)
 
     def _format_gi_vmethod (self, vmethod):
         title = vmethod.link.title
