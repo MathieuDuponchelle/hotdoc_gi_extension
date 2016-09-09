@@ -218,8 +218,8 @@ class GIExtension(BaseExtension):
     def get_dependencies ():
         return [ExtDependency('c-extension', is_upstream=True)]
 
-    def _get_languages(self):
-        return [self.language]
+    def _get_smart_index_title(self):
+        return 'GObject API Reference'
 
     def _get_user_index_path(self):
         return GIExtension.index
@@ -1000,22 +1000,6 @@ class GIExtension(BaseExtension):
                                                        klass_name))
             self.debug("Added vmethod symbol %s" % vfunc_node.attrib['name'])
 
-        is_gtype_struct_for = node.attrib.get('{%s}is-gtype-struct-for' %
-                self.__nsmap['glib'])
-
-        if is_gtype_struct_for is not None:
-            is_gtype_struct_for = '%s%s' % (components[0], is_gtype_struct_for)
-            class_node = self.__node_cache.get(is_gtype_struct_for)
-            if class_node is not None:
-                vmethods = class_node.findall('./core:virtual-method',
-                                              namespaces = self.__nsmap)
-                vnames = [vmethod.attrib['name'] for vmethod in vmethods]
-                members = []
-                for m in symbol.members:
-                    if not m.member_name in vnames:
-                        members.append(m)
-                symbol.members = members
-
         return symbols
 
     def __update_symbol(self, symbol):
@@ -1028,7 +1012,7 @@ class GIExtension(BaseExtension):
         if type(symbol) in (FunctionSymbol, CallbackSymbol):
             self.__update_function(symbol, node)
 
-        elif type (symbol) == StructSymbol:
+        elif type (symbol) in (StructSymbol, AliasSymbol):
             res = self.__update_struct (symbol, node)
 
         return res
