@@ -160,6 +160,8 @@ class GIExtension(BaseExtension):
         # Only used to reduce debug verbosity
         self.__dropped_symbols = set({})
 
+        self.__smart_filters = set()
+
         for gir_file in GIExtension.sources:
             gir_root = etree.parse(gir_file).getroot()
             self.__cache_nodes(gir_root)
@@ -268,7 +270,17 @@ class GIExtension(BaseExtension):
                 return gir_file
         return None
 
+    def __generate_smart_filters(self, id_prefixes, sym_prefixes, node):
+        sym_prefix = node.attrib['{%s}symbol-prefix' % self.__nsmap['c']]
+        self.__smart_filters.add(('%s_IS_%s' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_%s_GET_CLASS' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_%s_GET_IFACE' % (sym_prefixes, sym_prefix)).upper())
+
     def __cache_nodes(self, gir_root):
+        ns_node = gir_root.find('./{%s}namespace' % self.__nsmap['core'])
+        id_prefixes = ns_node.attrib['{%s}identifier-prefixes' % self.__nsmap['c']]
+        sym_prefixes = ns_node.attrib['{%s}symbol-prefixes' % self.__nsmap['c']]
+
         id_key = '{%s}identifier' % self.__nsmap['c']
         for node in gir_root.xpath(
                 './/*[@c:identifier]',
@@ -290,6 +302,7 @@ class GIExtension(BaseExtension):
                     self.__nsmap['glib'])
                 self.__get_type_functions.add(get_type_function)
                 self.__node_cache['%s::%s' % (name, name)] = node
+                self.__generate_smart_filters(id_prefixes, sym_prefixes, node)
 
         for node in gir_root.xpath(
                 './/core:property',
@@ -570,6 +583,12 @@ class GIExtension(BaseExtension):
             self.__dropped_symbols.add(name)
             return None
 
+        if name in self.__smart_filters and comment is None:
+            self.debug('Dropping %s' % name)
+            self.debug('Document it if you want it to be included')
+            self.__dropped_symbols.add(name)
+            return None
+
         # Drop get_type functions
         if name in self.__get_type_functions and comment is None:
             self.debug('Dropping get_type function %s' % name)
@@ -592,6 +611,10 @@ class GIExtension(BaseExtension):
                     self.debug("Dropping private structure %s" % name)
                     self.__dropped_symbols.add(name)
                     return None
+
+        if type_ == ExportedVariableSymbol:
+            if name in ('__inst', '__t', '__r'):
+                return None
 
         return super(GIExtension, self).get_or_create_symbol(*args, **kwargs)
 
