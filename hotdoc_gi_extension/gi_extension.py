@@ -51,12 +51,12 @@ from lxml import etree
 from collections import defaultdict
 
 from hotdoc.core.symbols import *
-from hotdoc.core.comment_block import Comment, comment_from_tag
 from hotdoc.core.base_extension import BaseExtension, ExtDependency
 from hotdoc.core.base_formatter import Formatter
 from hotdoc.core.file_includer import find_md_file
 from hotdoc.core.links import Link, LinkResolver
 from hotdoc.core.doc_tree import Page
+from hotdoc.core.comment_block import Comment
 from hotdoc.core.exceptions import BadInclusionException
 from hotdoc.utils.loggable import warn, Logger
 
@@ -273,6 +273,10 @@ class GIExtension(BaseExtension):
     def __generate_smart_filters(self, id_prefixes, sym_prefixes, node):
         sym_prefix = node.attrib['{%s}symbol-prefix' % self.__nsmap['c']]
         self.__smart_filters.add(('%s_IS_%s' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_TYPE_%s' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_%s' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_%s_CLASS' % (sym_prefixes, sym_prefix)).upper())
+        self.__smart_filters.add(('%s_IS_%s_CLASS' % (sym_prefixes, sym_prefix)).upper())
         self.__smart_filters.add(('%s_%s_GET_CLASS' % (sym_prefixes, sym_prefix)).upper())
         self.__smart_filters.add(('%s_%s_GET_IFACE' % (sym_prefixes, sym_prefix)).upper())
 
@@ -573,26 +577,15 @@ class GIExtension(BaseExtension):
             return None
 
         type_ = args[0]
-        comment = kwargs.get('comment')
 
-        # Macros need to be documented to not be filtered
-        # This allows filtering GObject boilerplate
-        if type_ in (FunctionMacroSymbol, ConstantSymbol) and comment is None:
-            self.debug('Dropping macro %s' % name)
-            self.debug('Document it if you want it to be included')
-            self.__dropped_symbols.add(name)
-            return None
-
-        if name in self.__smart_filters and comment is None:
+        if name in self.__smart_filters:
             self.debug('Dropping %s' % name)
-            self.debug('Document it if you want it to be included')
             self.__dropped_symbols.add(name)
             return None
 
         # Drop get_type functions
-        if name in self.__get_type_functions and comment is None:
+        if name in self.__get_type_functions:
             self.debug('Dropping get_type function %s' % name)
-            self.debug('Document it if you want it to be included')
             self.__dropped_symbols.add(name)
             return None
 
@@ -602,9 +595,8 @@ class GIExtension(BaseExtension):
             if node is not None:
                 is_gtype_struct_for = node.attrib.get('{%s}is-gtype-struct-for' %
                     self.__nsmap['glib'])
-                if is_gtype_struct_for and not comment:
+                if is_gtype_struct_for:
                     self.debug('Dropping class structure %s' % name)
-                    self.debug('Document it if you want it to be included')
                     return None
                 disguised = node.attrib.get('disguised')
                 if disguised == '1':
@@ -710,17 +702,12 @@ class GIExtension(BaseExtension):
             ptype_name = namespaced
         return type_tokens, ptype_name
 
-    def __create_parameter_symbol (self, gi_parameter, comment):
+    def __create_parameter_symbol (self, gi_parameter):
         param_name = gi_parameter.attrib['name']
-        if comment:
-            param_comment = comment.params.get (param_name)
-        else:
-            param_comment = None
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node (gi_parameter)
 
-        res = ParameterSymbol (argname=param_name, type_tokens=type_tokens,
-                comment=param_comment)
+        res = ParameterSymbol (argname=param_name, type_tokens=type_tokens)
         res.add_extension_attribute ('gi-extension', 'gi_name', gi_name)
 
         direction = gi_parameter.attrib.get('direction')
@@ -730,32 +717,25 @@ class GIExtension(BaseExtension):
 
         return res, direction
 
-    def __create_return_value_symbol (self, gi_retval, comment, out_parameters):
-        if comment:
-            return_tag = comment.tags.get ('returns', None)
-            return_comment = comment_from_tag (return_tag)
-        else:
-            return_comment = None
-
+    def __create_return_value_symbol (self, gi_retval, out_parameters):
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(gi_retval)
 
         if gi_name == 'none':
             ret_item = None
         else:
-            ret_item = ReturnItemSymbol (type_tokens=type_tokens,
-                    comment=return_comment)
+            ret_item = ReturnItemSymbol (type_tokens=type_tokens)
             ret_item.add_extension_attribute('gi-extension', 'gi_name', gi_name)
 
         res = [ret_item]
 
         for out_param in out_parameters:
             ret_item = ReturnItemSymbol (type_tokens=out_param.input_tokens,
-                    comment=out_param.comment, name=out_param.argname)
+                    name=out_param.argname)
             res.append(ret_item)
 
         return res
 
-    def __create_parameters_and_retval (self, node, comment):
+    def __create_parameters_and_retval (self, node):
         gi_parameters = node.find('{http://www.gtk.org/introspection/core/1.0}parameters')
 
         if gi_parameters is None:
@@ -769,21 +749,18 @@ class GIExtension(BaseExtension):
         parameters = []
 
         if instance_param is not None:
-            param, direction = self.__create_parameter_symbol (instance_param,
-                    comment)
+            param, direction = self.__create_parameter_symbol (instance_param)
             parameters.append (param)
 
         out_parameters = []
         for gi_parameter in gi_parameters:
-            param, direction = self.__create_parameter_symbol (gi_parameter,
-                    comment)
+            param, direction = self.__create_parameter_symbol (gi_parameter)
             parameters.append (param)
             if direction != 'in':
                 out_parameters.append (param)
 
         retval = node.find('{http://www.gtk.org/introspection/core/1.0}return-value')
-        retval = self.__create_return_value_symbol (retval, comment,
-                out_parameters)
+        retval = self.__create_return_value_symbol (retval, out_parameters)
 
         return (parameters, retval)
 
@@ -808,12 +785,11 @@ class GIExtension(BaseExtension):
     def __create_signal_symbol (self, node, object_name):
         name = node.attrib['name']
         unique_name = '%s::%s' % (object_name, name)
-        comment = self.doc_repo.doc_database.get_comment(unique_name)
 
-        parameters, retval = self.__create_parameters_and_retval (node, comment)
+        parameters, retval = self.__create_parameters_and_retval (node)
         res = self.get_or_create_symbol(SignalSymbol,
                 parameters=parameters, return_value=retval,
-                comment=comment, display_name=name, unique_name=unique_name)
+                display_name=name, unique_name=unique_name)
 
         flags = []
 
@@ -840,7 +816,6 @@ class GIExtension(BaseExtension):
     def __create_property_symbol (self, node, object_name):
         name = node.attrib['name']
         unique_name = '%s:%s' % (object_name, name)
-        comment = self.doc_repo.doc_database.get_comment(unique_name)
 
         type_tokens, gi_name = self.__type_tokens_and_gi_name_from_gi_node(node)
         type_ = QualifiedSymbol (type_tokens=type_tokens)
@@ -860,7 +835,7 @@ class GIExtension(BaseExtension):
             flags.append (ConstructFlag())
 
         res = self.get_or_create_symbol(PropertySymbol,
-                prop_type=type_, comment=comment,
+                prop_type=type_,
                 display_name=name, unique_name=unique_name)
 
         extra_content = self.get_formatter(self.doc_repo.output_format)._format_flags (flags)
@@ -868,14 +843,14 @@ class GIExtension(BaseExtension):
 
         return res
 
-    def __create_vfunc_symbol (self, node, comment, object_name):
+    def __create_vfunc_symbol (self, node, object_name):
         name = node.attrib['name']
         unique_name = '%s:::%s' % (object_name, name)
 
-        parameters, retval = self.__create_parameters_and_retval (node, comment)
+        parameters, retval = self.__create_parameters_and_retval (node)
         symbol = self.get_or_create_symbol(VFunctionSymbol,
                 parameters=parameters, 
-                return_value=retval, comment=comment, display_name=name,
+                return_value=retval, display_name=name,
                 unique_name=unique_name)
 
         self.__sort_parameters (symbol, retval, parameters)
@@ -883,34 +858,23 @@ class GIExtension(BaseExtension):
         return symbol
 
     def __create_class_symbol (self, symbol, gi_name):
-        comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
-        class_comment = self.doc_repo.doc_database.get_comment(comment_name)
+        klass_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
         hierarchy = self.__gir_hierarchies[gi_name]
         children = self.__gir_children_map[gi_name]
 
-        if class_comment:
-            class_symbol = self.get_or_create_symbol(ClassSymbol,
-                    hierarchy=hierarchy,
-                    children=children,
-                    comment=class_comment,
-                    display_name=symbol.display_name,
-                    unique_name=comment_name)
-        else:
-            class_symbol = self.get_or_create_symbol(ClassSymbol,
-                    hierarchy=hierarchy, children=children,
-                    display_name=symbol.display_name,
-                    unique_name=comment_name)
+        class_symbol = self.get_or_create_symbol(ClassSymbol,
+                hierarchy=hierarchy, children=children,
+                display_name=symbol.display_name,
+                unique_name=klass_name)
 
         return class_symbol
 
     def __create_interface_symbol (self, node, symbol, gi_name):
-        comment_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
-        comment = self.doc_repo.doc_database.get_comment(comment_name)
+        iface_name = '%s::%s' % (symbol.unique_name, symbol.unique_name)
 
         return self.get_or_create_symbol(InterfaceSymbol,
-                comment=comment,
                 display_name=symbol.display_name,
-                unique_name=comment_name)
+                unique_name=iface_name)
 
     def __get_gi_name_components(self, node):
         parent = node.getparent()
@@ -948,8 +912,7 @@ class GIExtension(BaseExtension):
 
         self.__add_translations(func.unique_name, node)
 
-        gi_params, retval = self.__create_parameters_and_retval (node,
-                func.comment)
+        gi_params, retval = self.__create_parameters_and_retval (node)
 
         func.return_value = retval
 
@@ -1010,18 +973,18 @@ class GIExtension(BaseExtension):
                                 namespaces = self.__nsmap)
 
         for vfunc_node in vmethods:
-            comment = None
-            block = None
+            sym = self.__create_vfunc_symbol (vfunc_node, klass_name)
+            symbols.append(sym)
+
+            self.debug("Added vmethod symbol %s" % vfunc_node.attrib['name'])
+
             if parent_comment:
                 comment = parent_comment.params.get (vfunc_node.attrib['name'])
                 if comment:
-                    block = Comment (name=vfunc_node.attrib['name'],
+                    block = Comment (name=sym.unique_name,
                                      description=comment.description,
                                      filename=parent_comment.filename)
-
-            symbols.append(self.__create_vfunc_symbol (vfunc_node, block,
-                                                       klass_name))
-            self.debug("Added vmethod symbol %s" % vfunc_node.attrib['name'])
+                    self.doc_repo.doc_database.add_comment(block)
 
         return symbols
 
